@@ -1,26 +1,38 @@
 package sim.util;
 
+import sim.metrics.LogStore;
+
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 public class Log {
 
-    private static final DateTimeFormatter FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     public static void info(String component, String message) {
-        System.out.println(timestamp() + " [INFO] [" + component + "] " + message);
+
+        String log = LocalDateTime.now() +
+                " [INFO] [" + component + "] " + message;
+
+        System.out.println(log);
+
+        LogStore.add(log);
     }
 
     public static void warn(String component, String message) {
-        System.out.println(timestamp() + " [WARN] [" + component + "] " + message);
+
+        String log = LocalDateTime.now() +
+                " [WARN] [" + component + "] " + message;
+
+        System.out.println(log);
+
+        LogStore.add(log);
     }
 
     public static void error(String component, String message) {
-        System.out.println(timestamp() + " [ERROR] [" + component + "] " + message);
-    }
 
-    private static String timestamp() {
-        return LocalDateTime.now().format(FORMATTER);
+        String log = LocalDateTime.now() +
+                " [ERROR] [" + component + "] " + message;
+
+        System.out.println(log);
+
+        LogStore.add(log);
     }
 }
