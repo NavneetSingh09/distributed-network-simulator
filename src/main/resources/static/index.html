@@ -31,9 +31,16 @@ button:hover{
     background:#1f5fd1;
 }
 
+.status{
+    margin-top:10px;
+    font-weight:bold;
+    color:green;
+}
+
+/* Logs panel */
 #logs{
     width:900px;
-    height:350px;
+    height:300px;
     border:1px solid #ccc;
     overflow:auto;
     margin:20px auto;
@@ -43,10 +50,58 @@ button:hover{
     font-family: monospace;
 }
 
-.status{
-    margin-top:10px;
-    font-weight:bold;
-    color:green;
+/* Network diagram */
+
+#network{
+position:relative;
+width:800px;
+height:260px;
+margin:40px auto;
+background:white;
+border:1px solid #ccc;
+border-radius:6px;
+}
+
+.node{
+position:absolute;
+padding:10px 14px;
+border-radius:6px;
+color:white;
+font-weight:bold;
+}
+
+#client{
+left:40px;
+top:110px;
+background:#4CAF50;
+}
+
+#router{
+left:350px;
+top:110px;
+background:#2196F3;
+}
+
+#server1{
+right:40px;
+top:40px;
+background:#9C27B0;
+}
+
+#server2{
+right:40px;
+bottom:40px;
+background:#FF9800;
+}
+
+/* packet animation */
+
+.packet{
+position:absolute;
+width:10px;
+height:10px;
+background:red;
+border-radius:50%;
 }
 
 </style>
@@ -73,48 +128,50 @@ button:hover{
 
 <div class="status" id="status"></div>
 
+<h2>Network Flow</h2>
+
+<div id="network">
+
+<div class="node" id="client">Client</div>
+<div class="node" id="router">Router</div>
+<div class="node" id="server1">Server1</div>
+<div class="node" id="server2">Server2</div>
+
+</div>
+
 <h2>System Logs</h2>
 
 <div id="logs"></div>
 
 <script>
 
+/* ---------- control buttons ---------- */
+
 async function startRouter(){
-
     await fetch('/api/router/start',{method:'POST'});
-
     document.getElementById("status").innerText = "Router started";
-
 }
 
 async function startServer1(){
-
     await fetch('/api/server/start/1',{method:'POST'});
-
     document.getElementById("status").innerText = "Server 1 started";
-
 }
 
 async function startServer2(){
-
     await fetch('/api/server/start/2',{method:'POST'});
-
     document.getElementById("status").innerText = "Server 2 started";
-
 }
 
 async function startTraffic(){
-
     await fetch('/api/traffic/start',{method:'POST'});
-
     document.getElementById("status").innerText = "Traffic simulation started";
-
 }
+
+/* ---------- logs ---------- */
 
 async function fetchLogs(){
 
     const response = await fetch('/api/logs');
-
     const logs = await response.json();
 
     const container = document.getElementById("logs");
@@ -124,7 +181,6 @@ async function fetchLogs(){
     logs.forEach(log => {
 
         const line = document.createElement("div");
-
         line.textContent = log;
 
         container.appendChild(line);
@@ -136,6 +192,60 @@ async function fetchLogs(){
 }
 
 setInterval(fetchLogs,1000);
+
+/* ---------- packet animation ---------- */
+
+async function fetchFlows(){
+
+let response = await fetch('/api/flows');
+let flows = await response.json();
+
+flows.forEach(flow=>{
+
+if(flow === "CLIENT_ROUTER")
+    animatePacket(80,130,380,130);
+
+if(flow === "ROUTER_SERVER1")
+    animatePacket(400,130,720,70);
+
+if(flow === "ROUTER_SERVER2")
+    animatePacket(400,130,720,190);
+
+});
+
+}
+
+setInterval(fetchFlows,1200);
+
+/* ---------- animation function ---------- */
+
+function animatePacket(x1,y1,x2,y2){
+
+const packet = document.createElement("div");
+packet.className = "packet";
+
+packet.style.left = x1+"px";
+packet.style.top = y1+"px";
+
+document.getElementById("network").appendChild(packet);
+
+let step = 0;
+
+const interval = setInterval(()=>{
+
+step+=0.05;
+
+packet.style.left = x1 + (x2-x1)*step + "px";
+packet.style.top = y1 + (y2-y1)*step + "px";
+
+if(step>=1){
+packet.remove();
+clearInterval(interval);
+}
+
+},30);
+
+}
 
 </script>
 

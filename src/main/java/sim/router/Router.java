@@ -3,6 +3,8 @@ package sim.router;
 import sim.model.Packet;
 import sim.util.Log;
 import sim.config.Ports;
+import sim.metrics.MetricsStore;
+import sim.metrics.PacketFlowStore;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -41,9 +43,16 @@ public class Router {
 
                 Log.info("ROUTER", "Packet received: " + packet.getPacketId());
 
+                // record flow: client -> router
+                PacketFlowStore.add("CLIENT_ROUTER");
+
                 // Simulate packet drop (10%)
                 if (random.nextDouble() < 0.10) {
+
                     Log.warn("ROUTER", "Packet dropped: " + packet.getPacketId());
+
+                    MetricsStore.packetDropped();
+
                     clientSocket.close();
                     continue;
                 }
@@ -51,11 +60,21 @@ public class Router {
                 int serverPort = getNextServer();
 
                 // Simulate network latency
-                simulateLatency();
+                long latency = simulateLatency();
+
+                MetricsStore.recordLatency(latency);
 
                 Log.info("ROUTER", "Forwarding packet to server on port " + serverPort);
 
+                // record router -> server flow
+                if (serverPort == Ports.SERVER1_PORT)
+                    PacketFlowStore.add("ROUTER_SERVER1");
+                else
+                    PacketFlowStore.add("ROUTER_SERVER2");
+
                 forwardToServer(packet, serverPort);
+
+                MetricsStore.packetProcessed();
 
                 clientSocket.close();
             }
@@ -75,7 +94,7 @@ public class Router {
             return Ports.SERVER2_PORT;
     }
 
-    private void simulateLatency() {
+    private long simulateLatency() {
 
         try {
 
@@ -85,7 +104,10 @@ public class Router {
 
             Thread.sleep(delay);
 
+            return delay;
+
         } catch (Exception ignored) {
+            return 0;
         }
     }
 
@@ -101,5 +123,4 @@ public class Router {
             Log.error("ROUTER", "Failed to forward packet: " + packet.getPacketId());
         }
     }
-    
 }

@@ -2,8 +2,8 @@ package sim.client;
 
 import sim.config.Ports;
 import sim.model.Packet;
-import sim.osi.OsiStack;
 import sim.util.Log;
+import sim.metrics.MetricsStore;
 
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -11,14 +11,12 @@ import java.util.Scanner;
 
 public class ClientNode {
 
-    private String clientIp;
-    private String serverIp;
-    private OsiStack osiStack;
+    private String sourceIp;
+    private String destinationIp;
 
-    public ClientNode(String clientIp, String serverIp) {
-        this.clientIp = clientIp;
-        this.serverIp = serverIp;
-        this.osiStack = new OsiStack();
+    public ClientNode(String sourceIp, String destinationIp) {
+        this.sourceIp = sourceIp;
+        this.destinationIp = destinationIp;
     }
 
     public void start() {
@@ -30,27 +28,34 @@ public class ClientNode {
         while (true) {
 
             System.out.print("Enter message: ");
+
             String message = scanner.nextLine();
 
             try {
 
-                String frame = osiStack.encapsulate(message);
+                Packet packet = Packet.newRequest(
+                        sourceIp,
+                        destinationIp,
+                        message
+                );
 
-                Packet packet = Packet.newRequest(clientIp, serverIp, frame);
-
-                Socket routerSocket = new Socket("localhost", Ports.ROUTER_PORT);
+                Socket socket = new Socket("localhost", Ports.ROUTER_PORT);
 
                 PrintWriter writer =
-                        new PrintWriter(routerSocket.getOutputStream(), true);
+                        new PrintWriter(socket.getOutputStream(), true);
 
                 writer.println(packet.serialize());
 
+                socket.close();
+
+                MetricsStore.packetSent();
+
                 Log.info("CLIENT", "Packet sent: " + packet.getPacketId());
 
-                routerSocket.close();
-
             } catch (Exception e) {
-                e.printStackTrace();
+
+                Log.error("CLIENT", "Failed to send packet");
+
             }
         }
     }

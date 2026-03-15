@@ -1,23 +1,20 @@
 package sim.server;
 
 import sim.model.Packet;
-import sim.osi.OsiStack;
 import sim.util.Log;
+import sim.metrics.MetricsStore;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 public class ServerNode {
 
     private int port;
-    private OsiStack osiStack;
 
     public ServerNode(int port) {
         this.port = port;
-        this.osiStack = new OsiStack();
     }
 
     public void start() {
@@ -28,35 +25,38 @@ public class ServerNode {
 
             while (true) {
 
-                Socket clientSocket = serverSocket.accept();
+                Socket socket = serverSocket.accept();
 
                 BufferedReader reader =
-                        new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
-                PrintWriter writer =
-                        new PrintWriter(clientSocket.getOutputStream(), true);
+                        new BufferedReader(
+                                new InputStreamReader(socket.getInputStream()));
 
                 String data = reader.readLine();
+
+                if (data == null) {
+                    socket.close();
+                    continue;
+                }
 
                 Packet packet = Packet.deserialize(data);
 
                 Log.info("SERVER", "Packet received: " + packet.getPacketId());
 
-                String message = osiStack.decapsulate(packet.getFrame());
+                Log.info("SERVER", "Decoded message: " + packet.getFrame());
 
-                Log.info("SERVER", "Decoded message: " + message);
+                // Update server load metrics
+                if (port == 6001)
+                    MetricsStore.server1Handled();
+                else
+                    MetricsStore.server2Handled();
 
-                // Create response
-                Packet response =
-                        Packet.newResponse(packet, osiStack.encapsulate("ACK: Message received"));
-
-                writer.println(response.serialize());
-
-                clientSocket.close();
+                socket.close();
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+
+            Log.error("SERVER", "Server failure: " + e.getMessage());
+
         }
     }
 }
