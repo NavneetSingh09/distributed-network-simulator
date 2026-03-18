@@ -1,6 +1,9 @@
 package sim.controller;
 
 import org.springframework.web.bind.annotation.*;
+
+import sim.config.RoutingConfig;
+import sim.config.SimulationConfig;
 import sim.service.SimulatorService;
 
 @RestController
@@ -36,4 +39,26 @@ public class SimulatorController {
         simulatorService.startTraffic();
         return "Traffic simulation started";
     }
+
+    @PostMapping("/api/config")
+public String updateConfig(
+        @RequestParam double dropRate,
+        @RequestParam int minLatency,
+        @RequestParam int maxLatency
+) {
+
+    SimulationConfig.DROP_RATE = dropRate;
+    SimulationConfig.MIN_LATENCY = minLatency;
+    SimulationConfig.MAX_LATENCY = maxLatency;
+
+    return "Updated";
+}
+
+@PostMapping("/api/routing")
+public String setRouting(@RequestParam String algo){
+
+    RoutingConfig.ALGORITHM = algo;
+
+    return "Routing set to " + algo;
+}
 }

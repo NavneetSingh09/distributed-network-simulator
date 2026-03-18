@@ -3,6 +3,8 @@ package sim.router;
 import sim.model.Packet;
 import sim.util.Log;
 import sim.config.Ports;
+import sim.config.RoutingConfig;
+import sim.config.SimulationConfig;
 import sim.metrics.MetricsStore;
 import sim.metrics.PacketFlowStore;
 
@@ -47,7 +49,7 @@ public class Router {
                 PacketFlowStore.add("CLIENT_ROUTER");
 
                 // Simulate packet drop (10%)
-                if (random.nextDouble() < 0.10) {
+                if (random.nextDouble() < SimulationConfig.DROP_RATE) {
 
                     Log.warn("ROUTER", "Packet dropped: " + packet.getPacketId());
 
@@ -86,19 +88,26 @@ public class Router {
 
     private int getNextServer() {
 
-        currentServer = (currentServer + 1) % 2;
+    if (RoutingConfig.ALGORITHM.equals("LEAST_LOAD")) {
 
-        if (currentServer == 0)
-            return Ports.SERVER1_PORT;
-        else
-            return Ports.SERVER2_PORT;
+        int s1 = MetricsStore.getServer1Load();
+        int s2 = MetricsStore.getServer2Load();
+
+        return (s1 <= s2) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
     }
+
+    // Default: Round Robin
+    currentServer = (currentServer + 1) % 2;
+
+    return (currentServer == 0) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
+}
 
     private long simulateLatency() {
 
         try {
 
-            int delay = 50 + random.nextInt(250); // 50–300 ms delay
+            int delay = SimulationConfig.MIN_LATENCY +
+            random.nextInt(SimulationConfig.MAX_LATENCY - SimulationConfig.MIN_LATENCY); 
 
             Log.info("ROUTER", "Simulating network latency: " + delay + "ms");
 

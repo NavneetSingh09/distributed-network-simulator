@@ -41,4 +41,13 @@ public class MetricsStore {
         if (latencySamples == 0) return 0;
         return totalLatency / (double) latencySamples;
     }
+
+    
+    public static synchronized int getServer1Load() {
+        return server1Load;
+    }
+
+    public static synchronized int getServer2Load() {
+        return server2Load;
+    }
 }
