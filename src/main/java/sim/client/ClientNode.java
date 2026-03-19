@@ -82,7 +82,7 @@ public class ClientNode {
                 sendPacket(packet);
             }
 
-            // 🔥 much smaller delay (continuous traffic)
+            // smaller delay (continuous traffic)
             int delay = 100 + (int)(Math.random() * 200); // 100–300ms
 
             Thread.sleep(delay);

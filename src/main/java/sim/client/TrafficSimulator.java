@@ -4,34 +4,29 @@ import sim.config.Ports;
 import sim.model.Packet;
 import sim.osi.OsiStack;
 import sim.util.Log;
+import sim.metrics.MetricsStore;
 
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.UUID;
+import java.util.Random;
 
 public class TrafficSimulator {
 
-    private static final int CLIENT_COUNT = 50;
+    private Random random = new Random();
 
-    public void start() {
+    /**
+     * Sends ONE packet (called repeatedly by SimulatorService)
+     */
+    public void sendPacket() {
 
-        Log.info("SIMULATOR", "Starting traffic simulation with " + CLIENT_COUNT + " clients");
-
-        for (int i = 0; i < CLIENT_COUNT; i++) {
-
-            int clientId = i;
-
-            new Thread(() -> simulateClient(clientId)).start();
-        }
-    }
-
-    private void simulateClient(int clientId) {
+        int clientId = random.nextInt(50); // simulate multiple clients
 
         try {
 
             OsiStack stack = new OsiStack();
 
-            String message = "Hello from client-" + clientId;
+            String message = "Hello from client-" + clientId + 
+                             " | " + System.currentTimeMillis();
 
             String encoded = stack.encapsulate(message);
 
@@ -48,14 +43,17 @@ public class TrafficSimulator {
 
             writer.println(packet.serialize());
 
-            Log.info("CLIENT-" + clientId,
-                    "Packet sent: " + packet.getPacketId());
-
             socket.close();
+
+            MetricsStore.packetSent();
+
+            Log.info("TRAFFIC",
+                    "Packet sent: " + packet.getPacketId());
 
         } catch (Exception e) {
 
-            Log.error("CLIENT-" + clientId, "Failed to send packet");
+            Log.error("TRAFFIC", "Failed to send packet");
+
         }
     }
 }

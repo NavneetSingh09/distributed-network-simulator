@@ -7,7 +7,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
 body{
     font-family: Arial;
     text-align:center;
@@ -35,74 +34,71 @@ button:hover{ background:#1f5fd1; }
     color:green;
 }
 
-/* CONTROL PANEL */
+.section{
+    margin-top:30px;
+}
 
 #controls{
-display:flex;
-justify-content:center;
-gap:40px;
-margin-top:20px;
-flex-wrap:wrap;
+    display:flex;
+    justify-content:center;
+    gap:40px;
+    flex-wrap:wrap;
+    margin-top:15px;
 }
 
 .control-box{
-background:white;
-padding:15px;
-border-radius:8px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    background:white;
+    padding:15px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
 }
 
-/* METRICS */
-
 #metrics{
-display:flex;
-justify-content:center;
-gap:20px;
-flex-wrap:wrap;
-margin-top:20px;
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    flex-wrap:wrap;
+    margin-top:20px;
 }
 
 .card{
-background:white;
-padding:15px;
-width:150px;
-border-radius:8px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    background:white;
+    padding:15px;
+    width:150px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
 }
 
 .card p{
-font-size:20px;
-font-weight:bold;
+    font-size:20px;
+    font-weight:bold;
 }
-
-/* CHART */
 
 #chartContainer{
-width:800px;
-margin:20px auto;
-background:white;
-padding:10px;
-border-radius:6px;
+    width:800px;
+    margin:20px auto;
+    background:white;
+    padding:10px;
+    border-radius:6px;
 }
 
-/* NETWORK */
-
 #network{
-position:relative;
-width:800px;
-height:260px;
-margin:40px auto;
-background:white;
-border:1px solid #ccc;
-border-radius:6px;
+    position:relative;
+    width:800px;
+    height:260px;
+    margin:40px auto;
+    background:white;
+    border:1px solid #ccc;
+    border-radius:6px;
 }
 
 .node{
-position:absolute;
-padding:10px 14px;
-border-radius:6px;
-color:white;
-font-weight:bold;
+    position:absolute;
+    padding:10px 14px;
+    border-radius:6px;
+    color:white;
+    font-weight:bold;
+    transition: all 0.3s ease;
 }
 
 #client{ left:40px; top:110px; background:#4CAF50; }
@@ -110,30 +106,31 @@ font-weight:bold;
 #server1Node{ right:40px; top:40px; background:#9C27B0; }
 #server2Node{ right:40px; bottom:40px; background:#FF9800; }
 
-/* PACKET */
+.node.down{
+    opacity:0.3;
+    filter: grayscale(100%);
+    border:2px solid red;
+}
 
 .packet{
-position:absolute;
-width:10px;
-height:10px;
-background:red;
-border-radius:50%;
+    position:absolute;
+    width:10px;
+    height:10px;
+    background:red;
+    border-radius:50%;
 }
-
-/* LOGS */
 
 #logs{
-width:900px;
-height:300px;
-border:1px solid #ccc;
-overflow:auto;
-margin:20px auto;
-text-align:left;
-padding:10px;
-background:white;
-font-family: monospace;
+    width:900px;
+    height:300px;
+    border:1px solid #ccc;
+    overflow:auto;
+    margin:20px auto;
+    text-align:left;
+    padding:10px;
+    background:white;
+    font-family: monospace;
 }
-
 </style>
 </head>
 
@@ -141,255 +138,315 @@ font-family: monospace;
 
 <h1>Distributed Network Simulator Dashboard</h1>
 
-<!-- BUTTONS -->
-
-<div>
-<button onclick="startRouter()">Start Router</button><br>
-<button onclick="startServer1()">Start Server 1</button>
-<button onclick="startServer2()">Start Server 2</button><br>
-
-<button onclick="startAutoTraffic()">Start Auto Traffic</button>
-<button onclick="stopAutoTraffic()">Stop Traffic</button>
+<div class="section">
+    <button onclick="startRouter()">Start Router</button><br>
+    <button onclick="startServer1()">Start Server 1</button>
+    <button onclick="startServer2()">Start Server 2</button><br>
+    <button onclick="startAutoTraffic()">Start Auto Traffic</button>
+    <button onclick="stopAutoTraffic()">Stop Traffic</button>
 </div>
 
 <div class="status" id="status"></div>
 
-<!-- SIMULATION CONTROLS -->
+<div class="section">
+    <h2>Routing Algorithm</h2>
 
-<h2>Simulation Controls</h2>
+    <select id="routingAlgo">
+        <option value="ROUND_ROBIN">Round Robin</option>
+        <option value="LEAST_LOAD">Least Load</option>
+    </select>
 
-<div id="controls">
-
-<div class="control-box">
-<label>Drop Rate (%)</label><br>
-<input type="range" min="0" max="50" value="10" id="dropRate">
-<p id="dropValue">10%</p>
+    <button onclick="updateRouting()">Apply Routing</button>
 </div>
 
-<div class="control-box">
-<label>Min Latency</label><br>
-<input type="range" min="10" max="200" value="50" id="minLatency">
-<p id="minValue">50</p>
+<div class="section">
+    <h2>Server Control</h2>
+
+    <button onclick="toggleServer(1, true)">Start Server1</button>
+    <button onclick="toggleServer(1, false)">Stop Server1</button><br>
+
+    <button onclick="toggleServer(2, true)">Start Server2</button>
+    <button onclick="toggleServer(2, false)">Stop Server2</button>
 </div>
 
-<div class="control-box">
-<label>Max Latency</label><br>
-<input type="range" min="100" max="1000" value="300" id="maxLatency">
-<p id="maxValue">300</p>
+<div class="section">
+    <h2>Simulation Controls</h2>
+
+    <div id="controls">
+        <div class="control-box">
+            <label>Drop Rate (%)</label><br>
+            <input type="range" min="0" max="50" value="10" id="dropRate">
+            <p id="dropValue">10%</p>
+        </div>
+
+        <div class="control-box">
+            <label>Min Latency</label><br>
+            <input type="range" min="10" max="200" value="50" id="minLatency">
+            <p id="minValue">50</p>
+        </div>
+
+        <div class="control-box">
+            <label>Max Latency</label><br>
+            <input type="range" min="100" max="1000" value="300" id="maxLatency">
+            <p id="maxValue">300</p>
+        </div>
+    </div>
+
+    <button onclick="updateConfig()">Apply Settings</button>
 </div>
 
+<div class="section">
+    <h2>Network Metrics</h2>
+
+    <div id="metrics">
+        <div class="card"><h3>Sent</h3><p id="packetsSent">0</p></div>
+        <div class="card"><h3>Dropped</h3><p id="packetsDropped">0</p></div>
+        <div class="card"><h3>Latency</h3><p id="latency">0</p></div>
+        <div class="card"><h3>Server1</h3><p id="server1Load">0</p></div>
+        <div class="card"><h3>Server2</h3><p id="server2Load">0</p></div>
+    </div>
 </div>
-
-<button onclick="updateConfig()">Apply Settings</button>
-
-<!-- ROUTING CONTROL -->
-
-<h2>Routing Algorithm</h2>
-
-<div id="controls">
-
-<div class="control-box">
-<label>Select Routing</label><br>
-
-<select id="routingAlgo">
-<option value="ROUND_ROBIN">Round Robin</option>
-<option value="LEAST_LOAD">Least Load</option>
-</select>
-
-</div>
-
-</div>
-
-<button onclick="updateRouting()">Apply Routing</button>
-
-<!-- METRICS -->
-
-<h2>Network Metrics</h2>
-
-<div id="metrics">
-<div class="card"><h3>Sent</h3><p id="packetsSent">0</p></div>
-<div class="card"><h3>Dropped</h3><p id="packetsDropped">0</p></div>
-<div class="card"><h3>Latency</h3><p id="latency">0</p></div>
-<div class="card"><h3>Server1</h3><p id="server1Load">0</p></div>
-<div class="card"><h3>Server2</h3><p id="server2Load">0</p></div>
-</div>
-
-<!-- CHART -->
 
 <div id="chartContainer">
-<canvas id="chart"></canvas>
+    <canvas id="chart"></canvas>
 </div>
-
-<!-- NETWORK -->
 
 <h2>Network Flow</h2>
 
 <div id="network">
-<div class="node" id="client">Client</div>
-<div class="node" id="router">Router</div>
-<div class="node" id="server1Node">Server1</div>
-<div class="node" id="server2Node">Server2</div>
+    <div class="node" id="client">Client</div>
+    <div class="node" id="router">Router</div>
+    <div class="node" id="server1Node">Server1</div>
+    <div class="node" id="server2Node">Server2</div>
 </div>
-
-<!-- LOGS -->
 
 <h2>System Logs</h2>
 <div id="logs"></div>
 
 <script>
+let smoothed = 0;
+let chart;
+let lastValue = 0;
 
-/* BUTTONS */
+function status(msg){
+    document.getElementById("status").innerText = msg;
+}
 
-async function startRouter(){ await fetch('/api/router/start',{method:'POST'}); status("Router started"); }
-async function startServer1(){ await fetch('/api/server/start/1',{method:'POST'}); status("Server1 started"); }
-async function startServer2(){ await fetch('/api/server/start/2',{method:'POST'}); status("Server2 started"); }
+async function safeFetch(url, options){
+    try{
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            status("Request failed: " + res.status);
+            return null;
+        }
+        return res;
+    }catch(e){
+        status("Server not reachable");
+        return null;
+    }
+}
+
+/* ---------- ACTIONS ---------- */
+
+async function startRouter(){
+    const res = await safeFetch('/api/router/start', {method:'POST'});
+    if (res) status("Router started");
+}
+
+async function startServer1(){
+    const res = await safeFetch('/api/server/start/1', {method:'POST'});
+    if (res) status("Server1 started");
+}
+
+async function startServer2(){
+    const res = await safeFetch('/api/server/start/2', {method:'POST'});
+    if (res) status("Server2 started");
+}
 
 async function startAutoTraffic(){
- await fetch('/api/traffic/start',{method:'POST'});
- status("Auto traffic started");
+    const res = await safeFetch('/api/traffic/start', {method:'POST'});
+    if (res) status("Auto traffic started");
 }
 
 async function stopAutoTraffic(){
- await fetch('/api/traffic/stop',{method:'POST'});
- status("Traffic stopped");
+    const res = await safeFetch('/api/traffic/stop', {method:'POST'});
+    if (res) status("Traffic stopped");
 }
 
-function status(msg){ document.getElementById("status").innerText = msg; }
+async function toggleServer(id, up){
+    const res = await safeFetch('/api/server/toggle', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `id=${id}&up=${up ? 'true' : 'false'}`
+    });
 
-/* ROUTING */
+    if (res) status("Server " + id + (up ? " started" : " stopped"));
+}
 
 async function updateRouting(){
- const algo = document.getElementById("routingAlgo").value;
-
- await fetch(`/api/routing?algo=${algo}`,{
-  method:'POST'
- });
-
- status("Routing: " + algo);
+    const algo = document.getElementById("routingAlgo").value;
+    const res = await safeFetch(`/api/routing?algo=${algo}`, {method:'POST'});
+    if (res) status("Routing set to " + algo);
 }
 
-/* CONTROL */
+/* ---------- CONFIG ---------- */
 
 const drop = document.getElementById("dropRate");
 const minL = document.getElementById("minLatency");
 const maxL = document.getElementById("maxLatency");
 
-drop.oninput = ()=> document.getElementById("dropValue").innerText = drop.value + "%";
-minL.oninput = ()=> document.getElementById("minValue").innerText = minL.value;
-maxL.oninput = ()=> document.getElementById("maxValue").innerText = maxL.value;
+drop.oninput = () => document.getElementById("dropValue").innerText = drop.value + "%";
+minL.oninput = () => document.getElementById("minValue").innerText = minL.value;
+maxL.oninput = () => document.getElementById("maxValue").innerText = maxL.value;
 
 async function updateConfig(){
-const dropRate = drop.value / 100;
-await fetch(`/api/config?dropRate=${dropRate}&minLatency=${minL.value}&maxLatency=${maxL.value}`,{method:'POST'});
-status("Simulation updated");
+    const dropRate = drop.value / 100;
+    const res = await safeFetch(
+        `/api/config?dropRate=${dropRate}&minLatency=${minL.value}&maxLatency=${maxL.value}`,
+        {method:'POST'}
+    );
+    if (res) status("Simulation updated");
 }
 
-/* LOGS */
+/* ---------- LOGS ---------- */
 
 async function fetchLogs(){
- const res = await fetch('/api/logs');
- const logs = await res.json();
- const box = document.getElementById("logs");
- box.innerHTML="";
- logs.forEach(l=>{
-  const d=document.createElement("div");
-  d.textContent=l;
-  box.appendChild(d);
- });
- box.scrollTop=box.scrollHeight;
+    try{
+        const res = await fetch('/api/logs');
+        if (!res.ok) return;
+
+        const logs = await res.json();
+        const box = document.getElementById("logs");
+        box.innerHTML = "";
+
+        logs.forEach(l => {
+            const d = document.createElement("div");
+            d.textContent = l;
+            box.appendChild(d);
+        });
+
+        box.scrollTop = box.scrollHeight;
+    }catch(e){
+        // ignore transient polling errors
+    }
 }
-setInterval(fetchLogs,1000);
+setInterval(fetchLogs, 1000);
 
-/* CHART */
-
-let chart;
-let lastValue = 0;
-let smoothed = 0;
+/* ---------- CHART ---------- */
 
 function initChart(){
- const ctx=document.getElementById("chart");
- chart=new Chart(ctx,{
-  type:'line',
-  data:{
-    labels:[],
-    datasets:[{
-      label:'Packets/sec',
-      data:[],
-      borderColor:'blue',
-      tension:0.4
-    }]
-  }
- });
+    const ctx = document.getElementById("chart");
+
+    chart = new Chart(ctx,{
+        type:'line',
+        data:{
+            labels:[],
+            datasets:[{
+                label:'Packets/sec',
+                data:[],
+                borderColor:'blue',
+                tension:0.4
+            }]
+        }
+    });
 }
 
-/* METRICS */
+/* ---------- METRICS ---------- */
 
 async function fetchMetrics(){
+    try{
+        const res = await fetch('/api/metrics');
+        if (!res.ok) return;
 
- const res = await fetch('/api/metrics');
- const d = await res.json();
+        const d = await res.json();
 
- document.getElementById("packetsSent").innerText=d.packetsSent;
- document.getElementById("packetsDropped").innerText=d.packetsDropped;
- document.getElementById("latency").innerText=d.avgLatency.toFixed(1);
- document.getElementById("server1Load").innerText=d.server1Load;
- document.getElementById("server2Load").innerText=d.server2Load;
+        document.getElementById("packetsSent").innerText = d.packetsSent;
+        document.getElementById("packetsDropped").innerText = d.packetsDropped;
+        document.getElementById("latency").innerText = d.avgLatency.toFixed(1);
+        document.getElementById("server1Load").innerText = d.server1Load;
+        document.getElementById("server2Load").innerText = d.server2Load;
 
- let current = d.packetsProcessed;
- let delta = current - lastValue;
- lastValue = current;
+        const current = d.packetsProcessed;
+        const delta = current - lastValue;
+        lastValue = current;
 
- smoothed = (smoothed * 0.7) + (delta * 0.3);
+        const baseline = Math.random() * 0.5;
+        const value = Math.max(delta, baseline);
 
- chart.data.labels.push("");
- chart.data.datasets[0].data.push(smoothed);
+        smoothed = smoothed * 0.6 + value * 0.4;
 
- if(chart.data.labels.length > 30){
-  chart.data.labels.shift();
-  chart.data.datasets[0].data.shift();
- }
+        chart.data.labels.push("");
+        chart.data.datasets[0].data.push(smoothed);
 
- chart.update();
+        if(chart.data.labels.length > 25){
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+
+        chart.update();
+    }catch(e){
+        // ignore transient polling errors
+    }
 }
+setInterval(fetchMetrics, 1000);
 
-setInterval(fetchMetrics,1000);
-
-/* FLOW */
+/* ---------- FLOW ---------- */
 
 async function fetchFlows(){
- const res=await fetch('/api/flows');
- const flows=await res.json();
+    try{
+        const [flowRes, statusRes] = await Promise.all([
+            fetch('/api/flows'),
+            fetch('/api/server/status')
+        ]);
 
- flows.forEach(f=>{
-  if(f==="CLIENT_ROUTER") animate(80,130,380,130);
-  if(f==="ROUTER_SERVER1") animate(400,130,720,70);
-  if(f==="ROUTER_SERVER2") animate(400,130,720,190);
- });
+        if (!flowRes.ok || !statusRes.ok) return;
+
+        const flows = await flowRes.json();
+        const serverStatus = await statusRes.json();
+
+        document.getElementById("server1Node").classList.toggle("down", !serverStatus.server1);
+        document.getElementById("server2Node").classList.toggle("down", !serverStatus.server2);
+
+        flows.forEach(f => {
+            if (f === "CLIENT_ROUTER") animate(80,130,380,130);
+            if (f === "ROUTER_SERVER1" && serverStatus.server1) animate(400,130,720,70);
+            if (f === "ROUTER_SERVER2" && serverStatus.server2) animate(400,130,720,190);
+        });
+    }catch(e){
+        // ignore transient polling errors
+    }
 }
-setInterval(fetchFlows,800);
+setInterval(fetchFlows, 800);
 
-/* ANIMATION */
+/* ---------- ANIMATION ---------- */
 
 function animate(x1,y1,x2,y2){
- const p=document.createElement("div");
- p.className="packet";
- p.style.left=x1+"px";
- p.style.top=y1+"px";
- document.getElementById("network").appendChild(p);
+    const p = document.createElement("div");
+    p.className = "packet";
+    p.style.left = x1 + "px";
+    p.style.top = y1 + "px";
 
- let t=0;
- const i=setInterval(()=>{
-  t+=0.05;
-  p.style.left=x1+(x2-x1)*t+"px";
-  p.style.top=y1+(y2-y1)*t+"px";
-  if(t>=1){ p.remove(); clearInterval(i); }
- },25);
+    document.getElementById("network").appendChild(p);
+
+    let t = 0;
+
+    const i = setInterval(() => {
+        t += 0.05;
+        p.style.left = x1 + (x2-x1)*t + "px";
+        p.style.top = y1 + (y2-y1)*t + "px";
+
+        if(t >= 1){
+            p.remove();
+            clearInterval(i);
+        }
+    }, 30);
 }
 
-/* INIT */
+/* ---------- INIT ---------- */
 
-window.onload=initChart;
-
+window.onload = initChart;
 </script>
 
 </body>

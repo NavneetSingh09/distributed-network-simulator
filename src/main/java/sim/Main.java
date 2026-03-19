@@ -34,12 +34,36 @@ public class Main {
                 break;
 
             case "traffic":
-                new TrafficSimulator().start();
+                startTrafficManually();
                 break;
 
             default:
                 System.out.println("Invalid argument");
                 System.out.println("Usage: router | server1 | server2 | client | traffic");
+        }
+    }
+
+    /* ================= TRAFFIC MODE ================= */
+
+    private static void startTrafficManually() {
+
+        System.out.println("Manual Traffic Mode Started...");
+
+        TrafficSimulator simulator = new TrafficSimulator();
+
+        try {
+
+            while (true) {
+
+                simulator.sendPacket();   // ✅ new method
+
+                Thread.sleep(500);        // control speed
+            }
+
+        } catch (Exception e) {
+
+            System.out.println("Traffic stopped");
+
         }
     }
 }
