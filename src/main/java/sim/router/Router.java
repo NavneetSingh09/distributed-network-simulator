@@ -1,13 +1,14 @@
 package sim.router;
 
-import sim.model.Packet;
-import sim.util.Log;
+import org.springframework.stereotype.Component;
 import sim.config.Ports;
 import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
 import sim.metrics.MetricsStore;
 import sim.metrics.PacketFlowStore;
+import sim.model.Packet;
+import sim.util.Log;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -15,144 +16,137 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+/**
+ * Listens for incoming packets from clients and forwards them to servers.
+ * Uses a thread pool so multiple packets can be handled concurrently.
+ * All dependencies are injected — no static references.
+ */
+@Component
 public class Router {
 
-    private int currentServer = 0;
-    private Random random = new Random();
+    private final SimulationConfig  simulationConfig;
+    private final RoutingConfig     routingConfig;
+    private final ServerStatusConfig serverStatusConfig;
+    private final MetricsStore      metricsStore;
+
+    // Thread pool: handles multiple incoming connections concurrently
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+
+    private volatile int currentServer = 0;
+    private final Random random = new Random();
+
+    public Router(SimulationConfig simulationConfig,
+                  RoutingConfig routingConfig,
+                  ServerStatusConfig serverStatusConfig,
+                  MetricsStore metricsStore) {
+        this.simulationConfig   = simulationConfig;
+        this.routingConfig      = routingConfig;
+        this.serverStatusConfig = serverStatusConfig;
+        this.metricsStore       = metricsStore;
+    }
 
     public void start() {
+        try (ServerSocket routerSocket = new ServerSocket(Ports.ROUTER_PORT)) {
 
-    try (ServerSocket routerSocket = new ServerSocket(Ports.ROUTER_PORT)) {
+            Log.info("ROUTER", "Router started on port " + Ports.ROUTER_PORT);
 
-        Log.info("ROUTER", "Router started on port " + Ports.ROUTER_PORT);
-
-        while (true) {
-
-            Socket clientSocket = routerSocket.accept();
-
-            BufferedReader reader =
-                    new BufferedReader(
-                            new InputStreamReader(clientSocket.getInputStream()));
-
-            String data = reader.readLine();
-
-            if (data == null) {
-                clientSocket.close();
-                continue;
+            while (true) {
+                Socket clientSocket = routerSocket.accept();
+                // Hand off to thread pool — router is no longer single-threaded
+                executor.submit(() -> handleConnection(clientSocket));
             }
 
+        } catch (Exception e) {
+            Log.error("ROUTER", "Router failure: " + e.getMessage());
+        }
+    }
+
+    private void handleConnection(Socket clientSocket) {
+        try (clientSocket;
+             BufferedReader reader = new BufferedReader(
+                     new InputStreamReader(clientSocket.getInputStream()))) {
+
+            String data = reader.readLine();
+            if (data == null) return;
+
             Packet packet = Packet.deserialize(data);
-
             Log.info("ROUTER", "Packet received: " + packet.getPacketId());
-
-            // record flow: client -> router
             PacketFlowStore.add("CLIENT_ROUTER");
 
-            // 🔴 Simulate packet drop
-            if (random.nextDouble() < SimulationConfig.DROP_RATE) {
-
+            // Simulate packet drop
+            if (random.nextDouble() < simulationConfig.getDropRate()) {
                 Log.warn("ROUTER", "Packet dropped: " + packet.getPacketId());
-
-                MetricsStore.packetDropped();
-
-                clientSocket.close();
-                continue;
+                metricsStore.packetDropped();
+                return;
             }
 
             int serverPort = getNextServer();
-
-            // ❗ HANDLE SERVER FAILURE (NEW)
             if (serverPort == -1) {
-
-                Log.warn("ROUTER", "Dropping packet - no servers available");
-
-                MetricsStore.packetDropped();
-
-                clientSocket.close();
-                continue;
+                Log.warn("ROUTER", "Dropping packet — no servers available");
+                metricsStore.packetDropped();
+                return;
             }
 
-            // 🟡 Simulate latency
             long latency = simulateLatency();
+            metricsStore.recordLatency(latency);
 
-            MetricsStore.recordLatency(latency);
-
-            Log.info("ROUTER", "Forwarding packet to server on port " + serverPort);
-
-            // record router -> server flow
+            Log.info("ROUTER", "Forwarding packet to port " + serverPort);
             if (serverPort == Ports.SERVER1_PORT)
                 PacketFlowStore.add("ROUTER_SERVER1");
             else
                 PacketFlowStore.add("ROUTER_SERVER2");
 
             forwardToServer(packet, serverPort);
+            metricsStore.packetProcessed();
 
-            MetricsStore.packetProcessed();
+        } catch (Exception e) {
+            Log.error("ROUTER", "Error handling connection: " + e.getMessage());
+        }
+    }
 
-            clientSocket.close();
+    private synchronized int getNextServer() {
+        boolean s1Up = serverStatusConfig.isServer1Up();
+        boolean s2Up = serverStatusConfig.isServer2Up();
+
+        if (!s1Up && !s2Up) {
+            Log.error("ROUTER", "All servers are DOWN!");
+            return -1;
+        }
+        if (s1Up && !s2Up) return Ports.SERVER1_PORT;
+        if (!s1Up)         return Ports.SERVER2_PORT;
+
+        // Both up — apply routing algorithm
+        if (routingConfig.getAlgorithm() == RoutingConfig.Algorithm.LEAST_LOAD) {
+            return (metricsStore.getServer1Load() <= metricsStore.getServer2Load())
+                    ? Ports.SERVER1_PORT
+                    : Ports.SERVER2_PORT;
         }
 
-    } catch (Exception e) {
-        Log.error("ROUTER", "Router failure: " + e.getMessage());
-    }
-}
-
-    private int getNextServer() {
-
-    boolean s1Up = ServerStatusConfig.SERVER1_UP;
-    boolean s2Up = ServerStatusConfig.SERVER2_UP;
-
-    // 🔴 both down
-    if (!s1Up && !s2Up) {
-        Log.error("ROUTER", "All servers are DOWN!");
-        return -1;
+        // Round Robin (default)
+        currentServer = (currentServer + 1) % 2;
+        return (currentServer == 0) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
     }
 
-    // 🟢 only one available
-    if (s1Up && !s2Up) return Ports.SERVER1_PORT;
-    if (!s1Up && s2Up) return Ports.SERVER2_PORT;
-
-    // 🔵 both up → apply routing algorithm
-    if (RoutingConfig.ALGORITHM.equals("LEAST_LOAD")) {
-
-        int s1 = MetricsStore.getServer1Load();
-        int s2 = MetricsStore.getServer2Load();
-
-        return (s1 <= s2) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
-    }
-
-    // Default: Round Robin
-    currentServer = (currentServer + 1) % 2;
-
-    return (currentServer == 0) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
-}
     private long simulateLatency() {
-
         try {
-
-            int delay = SimulationConfig.MIN_LATENCY +
-            random.nextInt(SimulationConfig.MAX_LATENCY - SimulationConfig.MIN_LATENCY); 
-
-            Log.info("ROUTER", "Simulating network latency: " + delay + "ms");
-
+            int range = simulationConfig.getMaxLatency() - simulationConfig.getMinLatency();
+            int delay = simulationConfig.getMinLatency() + (range > 0 ? random.nextInt(range) : 0);
+            Log.info("ROUTER", "Simulating latency: " + delay + "ms");
             Thread.sleep(delay);
-
             return delay;
-
-        } catch (Exception ignored) {
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
             return 0;
         }
     }
 
     private void forwardToServer(Packet packet, int port) {
-
         try (Socket serverSocket = new Socket("localhost", port);
-             PrintWriter writer =
-                     new PrintWriter(serverSocket.getOutputStream(), true)) {
-
+             PrintWriter writer = new PrintWriter(serverSocket.getOutputStream(), true)) {
             writer.println(packet.serialize());
-
         } catch (Exception e) {
             Log.error("ROUTER", "Failed to forward packet: " + packet.getPacketId());
         }

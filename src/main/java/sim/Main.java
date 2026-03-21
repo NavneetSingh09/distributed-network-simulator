@@ -2,10 +2,18 @@ package sim;
 
 import sim.client.ClientNode;
 import sim.client.TrafficSimulator;
+import sim.config.Ports;
+import sim.config.RoutingConfig;
+import sim.config.ServerStatusConfig;
+import sim.config.SimulationConfig;
+import sim.metrics.MetricsStore;
 import sim.router.Router;
 import sim.server.ServerNode;
-import sim.config.Ports;
 
+/**
+ * CLI entry point for running individual nodes outside of Spring Boot.
+ * Manually wires dependencies since Spring context is not active here.
+ */
 public class Main {
 
     public static void main(String[] args) {
@@ -15,26 +23,32 @@ public class Main {
             return;
         }
 
+        // Manual wiring — mirrors what Spring would do automatically
+        SimulationConfig  simConfig    = new SimulationConfig();
+        RoutingConfig     routingConfig= new RoutingConfig();
+        ServerStatusConfig statusConfig= new ServerStatusConfig();
+        MetricsStore      metrics      = new MetricsStore();
+
         switch (args[0]) {
 
             case "router":
-                new Router().start();
+                new Router(simConfig, routingConfig, statusConfig, metrics).start();
                 break;
 
             case "server1":
-                new ServerNode(Ports.SERVER1_PORT).start();
+                new ServerNode(Ports.SERVER1_PORT, metrics).start();
                 break;
 
             case "server2":
-                new ServerNode(Ports.SERVER2_PORT).start();
+                new ServerNode(Ports.SERVER2_PORT, metrics).start();
                 break;
 
             case "client":
-                new ClientNode("10.0.0.1", "10.0.0.5").start();
+                new ClientNode("10.0.0.1", "10.0.0.5", metrics).start();
                 break;
 
             case "traffic":
-                startTrafficManually();
+                startTrafficManually(metrics);
                 break;
 
             default:
@@ -43,27 +57,16 @@ public class Main {
         }
     }
 
-    /* ================= TRAFFIC MODE ================= */
-
-    private static void startTrafficManually() {
-
+    private static void startTrafficManually(MetricsStore metrics) {
         System.out.println("Manual Traffic Mode Started...");
-
-        TrafficSimulator simulator = new TrafficSimulator();
-
+        TrafficSimulator simulator = new TrafficSimulator(metrics);
         try {
-
             while (true) {
-
-                simulator.sendPacket();   // ✅ new method
-
-                Thread.sleep(500);        // control speed
+                simulator.sendPacket();
+                Thread.sleep(500);
             }
-
         } catch (Exception e) {
-
             System.out.println("Traffic stopped");
-
         }
     }
 }

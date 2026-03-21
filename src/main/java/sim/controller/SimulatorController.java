@@ -1,23 +1,30 @@
 package sim.controller;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.springframework.web.bind.annotation.*;
-
 import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
 import sim.service.SimulatorService;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api")
 public class SimulatorController {
 
-    private final SimulatorService simulatorService;
+    private final SimulatorService   simulatorService;
+    private final SimulationConfig   simulationConfig;
+    private final RoutingConfig      routingConfig;
+    private final ServerStatusConfig serverStatusConfig;
 
-    public SimulatorController(SimulatorService simulatorService) {
-        this.simulatorService = simulatorService;
+    public SimulatorController(SimulatorService simulatorService,
+                               SimulationConfig simulationConfig,
+                               RoutingConfig routingConfig,
+                               ServerStatusConfig serverStatusConfig) {
+        this.simulatorService   = simulatorService;
+        this.simulationConfig   = simulationConfig;
+        this.routingConfig      = routingConfig;
+        this.serverStatusConfig = serverStatusConfig;
     }
 
     /* ================= ROUTER ================= */
@@ -34,18 +41,11 @@ public class SimulatorController {
     public String startServer1() {
         try {
             simulatorService.startServer1();
-            ServerStatusConfig.SERVER1_UP = true;
-
+            serverStatusConfig.setServer1Up(true);
             System.out.println("Server1 STARTED");
-
             return "Server1 started";
-
         } catch (Exception e) {
-
-            ServerStatusConfig.SERVER1_UP = false;
-
-            System.out.println("Server1 FAILED");
-
+            serverStatusConfig.setServer1Up(false);
             return "Server1 failed to start";
         }
     }
@@ -54,83 +54,51 @@ public class SimulatorController {
     public String startServer2() {
         try {
             simulatorService.startServer2();
-            ServerStatusConfig.SERVER2_UP = true;
-
+            serverStatusConfig.setServer2Up(true);
             System.out.println("Server2 STARTED");
-
             return "Server2 started";
-
         } catch (Exception e) {
-
-            ServerStatusConfig.SERVER2_UP = false;
-
-            System.out.println("Server2 FAILED");
-
+            serverStatusConfig.setServer2Up(false);
             return "Server2 failed to start";
         }
     }
 
-    /* ================= TOGGLE (STOP / START) ================= */
+    /* ================= TOGGLE ================= */
 
-  @PostMapping("/server/toggle")
-public String toggleServer(
-        @RequestParam(name = "id") int id,
-        @RequestParam(name = "up") String up
-) {
-System.out.println("RAW up value = " + up);
-    boolean isUp = "true".equalsIgnoreCase(up);
-
-    System.out.println("Toggle called → id=" + id + " up=" + isUp);
-
-    if (id == 1) {
-        ServerStatusConfig.SERVER1_UP = isUp;
-    } else if (id == 2) {
-        ServerStatusConfig.SERVER2_UP = isUp;
-    } else {
-        return "Invalid server id";
+    @PostMapping("/server/toggle")
+public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name = "up") String up)  {
+        boolean isUp = "true".equalsIgnoreCase(up);
+        if (id == 1)      serverStatusConfig.setServer1Up(isUp);
+        else if (id == 2) serverStatusConfig.setServer2Up(isUp);
+        else              return "Invalid server id";
+        return "Server " + id + (isUp ? " UP" : " DOWN");
     }
-
-    return "Server " + id + (isUp ? " UP" : " DOWN");
-}
 
     /* ================= TRAFFIC ================= */
 
     @PostMapping("/traffic/start")
     public String startTraffic() {
-
-        System.out.println("Traffic START requested");
-
         simulatorService.startTraffic();
-
         return "Traffic started";
     }
 
     @PostMapping("/traffic/stop")
     public String stopTraffic() {
-
-        System.out.println("Traffic STOP requested");
-
         simulatorService.stopTraffic();
-
         return "Traffic stopped";
     }
 
     /* ================= CONFIG ================= */
 
     @PostMapping("/config")
-    public String updateConfig(
-            @RequestParam double dropRate,
-            @RequestParam int minLatency,
-            @RequestParam int maxLatency
-    ) {
-        SimulationConfig.DROP_RATE = dropRate;
-        SimulationConfig.MIN_LATENCY = minLatency;
-        SimulationConfig.MAX_LATENCY = maxLatency;
-
+    public String updateConfig(@RequestParam double dropRate,
+                               @RequestParam int minLatency,
+                               @RequestParam int maxLatency) {
+        simulationConfig.setDropRate(dropRate);
+        simulationConfig.setMinLatency(minLatency);
+        simulationConfig.setMaxLatency(maxLatency);
         System.out.println("Config updated → Drop:" + dropRate +
-                " MinLatency:" + minLatency +
-                " MaxLatency:" + maxLatency);
-
+                " MinLatency:" + minLatency + " MaxLatency:" + maxLatency);
         return "Simulation updated";
     }
 
@@ -138,24 +106,21 @@ System.out.println("RAW up value = " + up);
 
     @PostMapping("/routing")
     public String setRouting(@RequestParam String algo) {
-
-        RoutingConfig.ALGORITHM = algo;
-
-        System.out.println("Routing algorithm set to: " + algo);
-
-        return "Routing set to " + algo;
+        try {
+            routingConfig.setAlgorithm(algo);
+            return "Routing set to " + algo;
+        } catch (IllegalArgumentException e) {
+            return "Invalid algorithm. Use ROUND_ROBIN or LEAST_LOAD";
+        }
     }
 
     /* ================= STATUS ================= */
 
     @GetMapping("/server/status")
     public Map<String, Boolean> getStatus() {
-
-        Map<String, Boolean> map = new HashMap<>();
-
-        map.put("server1", ServerStatusConfig.SERVER1_UP);
-        map.put("server2", ServerStatusConfig.SERVER2_UP);
-
-        return map;
+        return Map.of(
+                "server1", serverStatusConfig.isServer1Up(),
+                "server2", serverStatusConfig.isServer2Up()
+        );
     }
 }

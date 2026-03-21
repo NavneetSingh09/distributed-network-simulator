@@ -6,37 +6,37 @@ import sim.metrics.LogStore;
 import sim.metrics.MetricsStore;
 import sim.metrics.PacketFlowStore;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 public class MetricsController {
 
+    private final MetricsStore metricsStore;
+
+    public MetricsController(MetricsStore metricsStore) {
+        this.metricsStore = metricsStore;
+    }
+
     @GetMapping("/api/logs")
     public List<String> getLogs() {
         return LogStore.getLogs();
     }
-    
+
     @GetMapping("/api/flows")
-public List<String> flows(){
-    return PacketFlowStore.getFlows();
-}
+    public List<String> flows() {
+        return PacketFlowStore.getFlows();
+    }
 
-@GetMapping("/api/metrics")
-public Map<String,Object> metrics(){
-
-    Map<String,Object> data = new HashMap<>();
-
-    data.put("packetsSent", MetricsStore.packetsSent);
-    data.put("packetsDropped", MetricsStore.packetsDropped);
-    data.put("packetsProcessed", MetricsStore.packetsProcessed);
-
-    data.put("server1Load", MetricsStore.server1Load);
-    data.put("server2Load", MetricsStore.server2Load);
-
-    data.put("avgLatency", MetricsStore.avgLatency());
-
-    return data;
-}
+    @GetMapping("/api/metrics")
+    public Map<String, Object> metrics() {
+        return Map.of(
+                "packetsSent",      metricsStore.getPacketsSent(),
+                "packetsDropped",   metricsStore.getPacketsDropped(),
+                "packetsProcessed", metricsStore.getPacketsProcessed(),
+                "server1Load",      metricsStore.getServer1Load(),
+                "server2Load",      metricsStore.getServer2Load(),
+                "avgLatency",       metricsStore.avgLatency()
+        );
+    }
 }
