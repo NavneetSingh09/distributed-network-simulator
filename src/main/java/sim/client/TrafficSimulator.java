@@ -10,10 +10,6 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Random;
 
-/**
- * Simulates multiple clients sending packets to the router.
- * MetricsStore is injected — no static references.
- */
 public class TrafficSimulator {
 
     private final MetricsStore metricsStore;
@@ -23,9 +19,6 @@ public class TrafficSimulator {
         this.metricsStore = metricsStore;
     }
 
-    /**
-     * Sends one packet to the router (called repeatedly by SimulatorService).
-     */
     public void sendPacket() {
         int clientId = random.nextInt(50);
 

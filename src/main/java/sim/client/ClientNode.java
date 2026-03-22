@@ -9,10 +9,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Scanner;
 
-/**
- * Interactive CLI client — manual or auto traffic mode.
- * MetricsStore is injected — no static references.
- */
+
 public class ClientNode {
 
     private final String       sourceIp;

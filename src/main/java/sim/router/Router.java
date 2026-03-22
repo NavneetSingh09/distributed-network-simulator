@@ -19,44 +19,47 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Listens for incoming packets from clients and forwards them to servers.
- * Uses a thread pool so multiple packets can be handled concurrently.
- * All dependencies are injected — no static references.
- */
+
 @Component
 public class Router {
 
-    private final SimulationConfig  simulationConfig;
-    private final RoutingConfig     routingConfig;
+    private static final int MAX_RETRIES  = 3;
+    private static final int RETRY_DELAY_MS = 200;
+
+    private final SimulationConfig   simulationConfig;
+    private final RoutingConfig      routingConfig;
     private final ServerStatusConfig serverStatusConfig;
-    private final MetricsStore      metricsStore;
+    private final MetricsStore       metricsStore;
+    private final PacketQueue        packetQueue;
 
-    // Thread pool: handles multiple incoming connections concurrently
     private final ExecutorService executor = Executors.newCachedThreadPool();
-
     private volatile int currentServer = 0;
     private final Random random = new Random();
 
     public Router(SimulationConfig simulationConfig,
                   RoutingConfig routingConfig,
                   ServerStatusConfig serverStatusConfig,
-                  MetricsStore metricsStore) {
+                  MetricsStore metricsStore,
+                  PacketQueue packetQueue) {
         this.simulationConfig   = simulationConfig;
         this.routingConfig      = routingConfig;
         this.serverStatusConfig = serverStatusConfig;
         this.metricsStore       = metricsStore;
+        this.packetQueue        = packetQueue;
     }
 
     public void start() {
-        try (ServerSocket routerSocket = new ServerSocket(Ports.ROUTER_PORT)) {
+        // Start the dispatcher thread that drains the queue
+        Thread dispatcher = new Thread(this::dispatchLoop, "router-dispatcher");
+        dispatcher.setDaemon(true);
+        dispatcher.start();
 
+        try (ServerSocket routerSocket = new ServerSocket(Ports.ROUTER_PORT)) {
             Log.info("ROUTER", "Router started on port " + Ports.ROUTER_PORT);
 
             while (true) {
                 Socket clientSocket = routerSocket.accept();
-                // Hand off to thread pool — router is no longer single-threaded
-                executor.submit(() -> handleConnection(clientSocket));
+                executor.submit(() -> receivePacket(clientSocket));
             }
 
         } catch (Exception e) {
@@ -64,7 +67,8 @@ public class Router {
         }
     }
 
-    private void handleConnection(Socket clientSocket) {
+    
+    private void receivePacket(Socket clientSocket) {
         try (clientSocket;
              BufferedReader reader = new BufferedReader(
                      new InputStreamReader(clientSocket.getInputStream()))) {
@@ -76,35 +80,86 @@ public class Router {
             Log.info("ROUTER", "Packet received: " + packet.getPacketId());
             PacketFlowStore.add("CLIENT_ROUTER");
 
-            // Simulate packet drop
+            // Simulate packet drop BEFORE enqueuing
             if (random.nextDouble() < simulationConfig.getDropRate()) {
-                Log.warn("ROUTER", "Packet dropped: " + packet.getPacketId());
+                Log.warn("ROUTER", "Packet dropped (simulated): " + packet.getPacketId());
                 metricsStore.packetDropped();
                 return;
             }
 
-            int serverPort = getNextServer();
-            if (serverPort == -1) {
-                Log.warn("ROUTER", "Dropping packet — no servers available");
+            // Try to enqueue — reject if queue is full
+            if (!packetQueue.enqueue(packet)) {
+                Log.warn("ROUTER", "Queue full — packet rejected: " + packet.getPacketId());
                 metricsStore.packetDropped();
-                return;
+            } else {
+                Log.info("ROUTER", "Packet queued. Queue size: " + packetQueue.size());
+                metricsStore.packetQueued();
+            }
+
+        } catch (Exception e) {
+            Log.error("ROUTER", "Error receiving packet: " + e.getMessage());
+        }
+    }
+
+    
+    private void dispatchLoop() {
+        Log.info("ROUTER", "Dispatcher started");
+
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                Packet packet = packetQueue.dequeue(500);
+                if (packet == null) continue; // timeout, loop again
+
+                metricsStore.packetDequeued();
+                forwardWithRetry(packet);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    
+    private void forwardWithRetry(Packet packet) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+
+            int serverPort = getNextServer();
+
+            if (serverPort == -1) {
+                Log.warn("ROUTER", "No servers available. Attempt " + attempt + "/" + MAX_RETRIES);
+
+                if (attempt == MAX_RETRIES) {
+                    Log.error("ROUTER", "All retries exhausted — dropping packet: " + packet.getPacketId());
+                    metricsStore.packetDropped();
+                    return;
+                }
+
+                sleep(RETRY_DELAY_MS);
+                continue;
             }
 
             long latency = simulateLatency();
             metricsStore.recordLatency(latency);
 
-            Log.info("ROUTER", "Forwarding packet to port " + serverPort);
-            if (serverPort == Ports.SERVER1_PORT)
-                PacketFlowStore.add("ROUTER_SERVER1");
-            else
-                PacketFlowStore.add("ROUTER_SERVER2");
+            boolean success = forwardToServer(packet, serverPort);
 
-            forwardToServer(packet, serverPort);
-            metricsStore.packetProcessed();
+            if (success) {
+                if (serverPort == Ports.SERVER1_PORT)
+                    PacketFlowStore.add("ROUTER_SERVER1");
+                else
+                    PacketFlowStore.add("ROUTER_SERVER2");
 
-        } catch (Exception e) {
-            Log.error("ROUTER", "Error handling connection: " + e.getMessage());
+                metricsStore.packetProcessed();
+                Log.info("ROUTER", "Packet delivered on attempt " + attempt + ": " + packet.getPacketId());
+                return;
+            }
+
+            Log.warn("ROUTER", "Forward failed. Attempt " + attempt + "/" + MAX_RETRIES);
+            sleep(RETRY_DELAY_MS);
         }
+
+        Log.error("ROUTER", "All retries exhausted — dropping packet: " + packet.getPacketId());
+        metricsStore.packetDropped();
     }
 
     private synchronized int getNextServer() {
@@ -118,14 +173,11 @@ public class Router {
         if (s1Up && !s2Up) return Ports.SERVER1_PORT;
         if (!s1Up)         return Ports.SERVER2_PORT;
 
-        // Both up — apply routing algorithm
         if (routingConfig.getAlgorithm() == RoutingConfig.Algorithm.LEAST_LOAD) {
             return (metricsStore.getServer1Load() <= metricsStore.getServer2Load())
-                    ? Ports.SERVER1_PORT
-                    : Ports.SERVER2_PORT;
+                    ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
         }
 
-        // Round Robin (default)
         currentServer = (currentServer + 1) % 2;
         return (currentServer == 0) ? Ports.SERVER1_PORT : Ports.SERVER2_PORT;
     }
@@ -137,18 +189,29 @@ public class Router {
             Log.info("ROUTER", "Simulating latency: " + delay + "ms");
             Thread.sleep(delay);
             return delay;
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return 0;
         }
     }
 
-    private void forwardToServer(Packet packet, int port) {
+  
+    private boolean forwardToServer(Packet packet, int port) {
         try (Socket serverSocket = new Socket("localhost", port);
              PrintWriter writer = new PrintWriter(serverSocket.getOutputStream(), true)) {
             writer.println(packet.serialize());
+            return true;
         } catch (Exception e) {
-            Log.error("ROUTER", "Failed to forward packet: " + packet.getPacketId());
+            Log.error("ROUTER", "Failed to forward to port " + port + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void sleep(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

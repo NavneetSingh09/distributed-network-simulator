@@ -2,10 +2,7 @@ package sim.config;
 
 import org.springframework.stereotype.Component;
 
-/**
- * Simulation tuning parameters.
- * Injected as a Spring bean — no static state, fully testable.
- */
+
 @Component
 public class SimulationConfig {
 

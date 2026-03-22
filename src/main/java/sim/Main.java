@@ -7,13 +7,11 @@ import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
 import sim.metrics.MetricsStore;
+import sim.router.PacketQueue;
 import sim.router.Router;
 import sim.server.ServerNode;
 
-/**
- * CLI entry point for running individual nodes outside of Spring Boot.
- * Manually wires dependencies since Spring context is not active here.
- */
+
 public class Main {
 
     public static void main(String[] args) {
@@ -24,15 +22,16 @@ public class Main {
         }
 
         // Manual wiring — mirrors what Spring would do automatically
-        SimulationConfig  simConfig    = new SimulationConfig();
-        RoutingConfig     routingConfig= new RoutingConfig();
-        ServerStatusConfig statusConfig= new ServerStatusConfig();
-        MetricsStore      metrics      = new MetricsStore();
+        SimulationConfig   simConfig    = new SimulationConfig();
+        RoutingConfig      routingConfig = new RoutingConfig();
+        ServerStatusConfig statusConfig  = new ServerStatusConfig();
+        MetricsStore       metrics       = new MetricsStore();
+        PacketQueue        packetQueue   = new PacketQueue();
 
         switch (args[0]) {
 
             case "router":
-                new Router(simConfig, routingConfig, statusConfig, metrics).start();
+                new Router(simConfig, routingConfig, statusConfig, metrics, packetQueue).start();
                 break;
 
             case "server1":

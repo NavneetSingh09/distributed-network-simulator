@@ -65,8 +65,8 @@ public class SimulatorController {
 
     /* ================= TOGGLE ================= */
 
-    @PostMapping("/server/toggle")
-public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name = "up") String up)  {
+   @PostMapping("/server/toggle")
+public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name = "up") String up) {
         boolean isUp = "true".equalsIgnoreCase(up);
         if (id == 1)      serverStatusConfig.setServer1Up(isUp);
         else if (id == 2) serverStatusConfig.setServer2Up(isUp);
@@ -91,9 +91,9 @@ public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name
     /* ================= CONFIG ================= */
 
     @PostMapping("/config")
-    public String updateConfig(@RequestParam double dropRate,
-                               @RequestParam int minLatency,
-                               @RequestParam int maxLatency) {
+    public String updateConfig(@RequestParam(name = "dropRate") double dropRate,
+                           @RequestParam(name = "minLatency") int minLatency,
+                           @RequestParam(name = "maxLatency") int maxLatency) {
         simulationConfig.setDropRate(dropRate);
         simulationConfig.setMinLatency(minLatency);
         simulationConfig.setMaxLatency(maxLatency);
@@ -105,7 +105,7 @@ public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name
     /* ================= ROUTING ================= */
 
     @PostMapping("/routing")
-    public String setRouting(@RequestParam String algo) {
+    public String setRouting(@RequestParam(name = "algo") String algo) {
         try {
             routingConfig.setAlgorithm(algo);
             return "Routing set to " + algo;

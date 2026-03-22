@@ -7,10 +7,7 @@ import sim.metrics.MetricsStore;
 import sim.router.Router;
 import sim.server.ServerNode;
 
-/**
- * Orchestrates starting/stopping of the router, servers, and traffic generator.
- * All dependencies are injected — no static references.
- */
+
 @Service
 public class SimulatorService {
 

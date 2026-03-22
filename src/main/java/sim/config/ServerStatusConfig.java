@@ -2,10 +2,7 @@ package sim.config;
 
 import org.springframework.stereotype.Component;
 
-/**
- * Tracks which servers are currently up.
- * Injected as a Spring bean — no static state, fully testable.
- */
+
 @Component
 public class ServerStatusConfig {
 

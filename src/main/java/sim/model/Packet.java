@@ -6,8 +6,8 @@ public class Packet {
     private String packetId;
     private String sourceIp;
     private String destinationIp;
-    private String kind;   // REQUEST or RESPONSE
-    private String frame;  // full encapsulated data
+    private String kind;   
+    private String frame;  
 
     public Packet() {
     }

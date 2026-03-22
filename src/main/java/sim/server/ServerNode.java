@@ -10,10 +10,7 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-/**
- * Receives packets forwarded by the Router.
- * MetricsStore is injected — no static references.
- */
+
 public class ServerNode {
 
     private final int          port;
