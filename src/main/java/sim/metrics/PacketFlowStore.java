@@ -19,5 +19,7 @@ public class PacketFlowStore {
     public static synchronized List<String> getFlows(){
         return new ArrayList<>(flows);
     }
-
+public static synchronized void clear() {
+    flows.clear();
+}
 }

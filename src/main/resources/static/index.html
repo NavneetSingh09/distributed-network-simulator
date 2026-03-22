@@ -1,453 +1,892 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Distributed Network Simulator</title>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
-body{
-    font-family: Arial;
-    text-align:center;
-    background:#f4f6f8;
+:root {
+    --bg:        #0a0e1a;
+    --surface:   #111827;
+    --surface2:  #1a2235;
+    --border:    #1f2d45;
+    --accent:    #00d4ff;
+    --accent2:   #7c3aed;
+    --green:     #10b981;
+    --yellow:    #f59e0b;
+    --red:       #ef4444;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-ui:   'Space Grotesk', sans-serif;
 }
 
-h1{ margin-top:30px; }
-
-button{
-    padding:12px 20px;
-    margin:10px;
-    font-size:16px;
-    border:none;
-    border-radius:6px;
-    background:#2b7cff;
-    color:white;
-    cursor:pointer;
+body.light {
+    --bg:      #f0f4f8;
+    --surface: #ffffff;
+    --surface2: #e8edf2;
+    --border:  #d1d9e0;
+    --text:    #1a202c;
+    --muted:   #718096;
 }
 
-button:hover{ background:#1f5fd1; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-.status{
-    margin-top:10px;
-    font-weight:bold;
-    color:green;
+body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.3s, color 0.3s;
 }
 
-.section{
-    margin-top:30px;
+/* ── HEADER ── */
+.header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    transition: background 0.3s, border-color 0.3s;
 }
 
-#controls{
-    display:flex;
-    justify-content:center;
-    gap:40px;
-    flex-wrap:wrap;
-    margin-top:15px;
+.header-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    font-family: var(--font-mono);
 }
 
-.control-box{
-    background:white;
-    padding:15px;
-    border-radius:8px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+.header-title span { color: var(--muted); font-weight: 400; }
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
-#metrics{
-    display:flex;
-    justify-content:center;
-    gap:20px;
-    flex-wrap:wrap;
-    margin-top:20px;
+.ws-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
 }
 
-.card{
-    background:white;
-    padding:15px;
-    width:150px;
-    border-radius:8px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+.ws-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    transition: background 0.3s;
+}
+.ws-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+/* ── THEME TOGGLE ── */
+.theme-toggle {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── LAYOUT ── */
+.main { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
+.full { margin-bottom: 20px; }
+
+/* ── CARD ── */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: background 0.3s, border-color 0.3s;
 }
 
-.card p{
-    font-size:20px;
-    font-weight:bold;
+.card-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    font-family: var(--font-mono);
 }
 
-#chartContainer{
-    width:800px;
-    margin:20px auto;
-    background:white;
-    padding:10px;
-    border-radius:6px;
+/* ── METRIC CARDS ── */
+.metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, background 0.3s;
 }
 
-#network{
-    position:relative;
-    width:800px;
-    height:260px;
-    margin:40px auto;
-    background:white;
-    border:1px solid #ccc;
-    border-radius:6px;
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.5;
 }
 
-.node{
-    position:absolute;
-    padding:10px 14px;
-    border-radius:6px;
-    color:white;
-    font-weight:bold;
+.metric-card.dropped::before { background: var(--red); }
+.metric-card.latency::before  { background: var(--yellow); }
+.metric-card.server::before   { background: var(--accent2); }
+
+.metric-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+    margin-bottom: 8px;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text);
+    transition: color 0.3s;
+    line-height: 1;
+}
+
+.metric-value.accent  { color: var(--accent); }
+.metric-value.dropped { color: var(--red); }
+.metric-value.latency { color: var(--yellow); }
+
+.metric-sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: var(--font-mono);
+}
+
+/* ── QUEUE BAR ── */
+.queue-bar-wrap {
+    margin-top: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+}
+
+.queue-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--green), var(--yellow));
+    transition: width 0.5s ease, background 0.3s;
+    width: 0%;
+}
+
+.queue-bar-fill.warn  { background: linear-gradient(90deg, var(--yellow), var(--red)); }
+.queue-bar-fill.full  { background: var(--red); }
+
+/* ── SERVER HEALTH ── */
+.server-health {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    transition: border-color 0.3s, background 0.3s;
+}
+
+.server-health.up   { border-color: var(--green); }
+.server-health.down { border-color: var(--red); background: rgba(239,68,68,0.05); }
+
+.server-indicator {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+.server-health.up   .server-indicator { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.server-health.down .server-indicator { background: var(--red); }
+
+.server-name {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.server-status-text {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--muted);
+}
+
+.server-health.up   .server-status-text { color: var(--green); }
+.server-health.down .server-status-text { color: var(--red); }
+
+.server-load-num {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* ── BUTTONS ── */
+.btn {
+    padding: 9px 18px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.03em;
+}
+
+.btn-primary   { background: var(--accent); color: #000; }
+.btn-primary:hover { background: #00b8d9; transform: translateY(-1px); }
+
+.btn-success   { background: var(--green); color: #000; }
+.btn-success:hover { background: #059669; transform: translateY(-1px); }
+
+.btn-danger    { background: var(--red); color: #fff; }
+.btn-danger:hover { background: #dc2626; transform: translateY(-1px); }
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-sm { padding: 6px 12px; font-size: 0.75rem; }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── STATUS TOAST ── */
+.status-toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    transform: translateY(100px);
+    opacity: 0;
     transition: all 0.3s ease;
+    z-index: 999;
+    max-width: 320px;
+}
+.status-toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── NETWORK FLOW ── */
+#network {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    background: var(--surface2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    transition: background 0.3s;
 }
 
-#client{ left:40px; top:110px; background:#4CAF50; }
-#router{ left:350px; top:110px; background:#2196F3; }
-#server1Node{ right:40px; top:40px; background:#9C27B0; }
-#server2Node{ right:40px; bottom:40px; background:#FF9800; }
+.node {
+    position: absolute;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    letter-spacing: 0.05em;
+}
 
-.node.down{
-    opacity:0.3;
+#client      { left: 4%; top: 50%; transform: translateY(-50%); background: rgba(16,185,129,0.2); border-color: var(--green); color: var(--green); }
+#routerNode  { left: 42%; top: 50%; transform: translate(-50%, -50%); background: rgba(0,212,255,0.15); border-color: var(--accent); color: var(--accent); }
+#server1Node { right: 4%; top: 28%; transform: translateY(-50%); background: rgba(124,58,237,0.2); border-color: var(--accent2); color: #a78bfa; }
+#server2Node { right: 4%; top: 72%; transform: translateY(-50%); background: rgba(245,158,11,0.2); border-color: var(--yellow); color: var(--yellow); }
+
+.node.down {
+    opacity: 0.3;
     filter: grayscale(100%);
-    border:2px solid red;
+    border-color: var(--red) !important;
 }
 
-.packet{
-    position:absolute;
-    width:10px;
-    height:10px;
-    background:red;
-    border-radius:50%;
+.packet {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    pointer-events: none;
 }
 
-#logs{
-    width:900px;
-    height:300px;
-    border:1px solid #ccc;
-    overflow:auto;
-    margin:20px auto;
-    text-align:left;
-    padding:10px;
-    background:white;
-    font-family: monospace;
+#network svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
 }
+
+/* ── SLIDERS ── */
+.slider-group { display: flex; flex-direction: column; gap: 16px; }
+
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.slider-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    width: 100px;
+    flex-shrink: 0;
+}
+
+input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.slider-val {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    width: 48px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ── SELECT ── */
+select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.3s, border-color 0.3s;
+}
+select:focus { border-color: var(--accent); }
+
+/* ── LOGS ── */
+#logs {
+    height: 240px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.6;
+    padding: 4px 0;
+}
+
+#logs::-webkit-scrollbar { width: 4px; }
+#logs::-webkit-scrollbar-track { background: transparent; }
+#logs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.log-line { padding: 2px 0; color: var(--muted); border-bottom: 1px solid rgba(128,128,128,0.1); }
+.log-line.info  { color: var(--muted); }
+.log-line.warn  { color: var(--yellow); }
+.log-line.error { color: var(--red); }
+
+/* ── CHART ── */
+#chartContainer {
+    position: relative;
+    height: 200px;
+}
+
+/* ── SECTION TITLE ── */
+.section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+@keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
+.pop { animation: pop 0.2s ease; }
 </style>
 </head>
 
 <body>
 
-<h1>Distributed Network Simulator Dashboard</h1>
-
-<div class="section">
-    <button onclick="startRouter()">Start Router</button><br>
-    <button onclick="startServer1()">Start Server 1</button>
-    <button onclick="startServer2()">Start Server 2</button><br>
-    <button onclick="startAutoTraffic()">Start Auto Traffic</button>
-    <button onclick="stopAutoTraffic()">Stop Traffic</button>
-</div>
-
-<div class="status" id="status"></div>
-
-<div class="section">
-    <h2>Routing Algorithm</h2>
-
-    <select id="routingAlgo">
-        <option value="ROUND_ROBIN">Round Robin</option>
-        <option value="LEAST_LOAD">Least Load</option>
-    </select>
-
-    <button onclick="updateRouting()">Apply Routing</button>
-</div>
-
-<div class="section">
-    <h2>Server Control</h2>
-
-    <button onclick="toggleServer(1, true)">Start Server1</button>
-    <button onclick="toggleServer(1, false)">Stop Server1</button><br>
-
-    <button onclick="toggleServer(2, true)">Start Server2</button>
-    <button onclick="toggleServer(2, false)">Stop Server2</button>
-</div>
-
-<div class="section">
-    <h2>Simulation Controls</h2>
-
-    <div id="controls">
-        <div class="control-box">
-            <label>Drop Rate (%)</label><br>
-            <input type="range" min="0" max="50" value="10" id="dropRate">
-            <p id="dropValue">10%</p>
+<!-- HEADER -->
+<div class="header">
+    <div class="header-title">DIST<span>/</span>NET<span>-</span>SIM <span>v2.0</span></div>
+    <div class="header-right">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
+            <span id="themeIcon">☀️</span>
+            <span id="themeLabel">Light</span>
+        </button>
+        <div class="ws-badge">
+            <div class="ws-dot" id="wsDot"></div>
+            <span id="wsStatus">connecting...</span>
         </div>
+    </div>
+</div>
 
-        <div class="control-box">
-            <label>Min Latency</label><br>
-            <input type="range" min="10" max="200" value="50" id="minLatency">
-            <p id="minValue">50</p>
+<div class="main">
+
+    <!-- ROW 1: METRICS -->
+    <div class="grid-5">
+        <div class="metric-card">
+            <div class="metric-label">Packets Sent</div>
+            <div class="metric-value accent" id="packetsSent">0</div>
+            <div class="metric-sub">total transmitted</div>
         </div>
-
-        <div class="control-box">
-            <label>Max Latency</label><br>
-            <input type="range" min="100" max="1000" value="300" id="maxLatency">
-            <p id="maxValue">300</p>
+        <div class="metric-card dropped">
+            <div class="metric-label">Dropped</div>
+            <div class="metric-value dropped" id="packetsDropped">0</div>
+            <div class="metric-sub">simulated loss</div>
+        </div>
+        <div class="metric-card latency">
+            <div class="metric-label">Avg Latency</div>
+            <div class="metric-value latency" id="latency">0</div>
+            <div class="metric-sub">milliseconds</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Processed</div>
+            <div class="metric-value" id="packetsProcessed">0</div>
+            <div class="metric-sub">delivered</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Queue Size</div>
+            <div class="metric-value" id="queueSizeVal">0</div>
+            <div class="metric-sub">buffered packets</div>
+            <div class="queue-bar-wrap">
+                <div class="queue-bar-fill" id="queueBar"></div>
+            </div>
         </div>
     </div>
 
-    <button onclick="updateConfig()">Apply Settings</button>
-</div>
+    <!-- ROW 2: CONTROLS + SERVER HEALTH + CHART -->
+    <div class="grid-3">
 
-<div class="section">
-    <h2>Network Metrics</h2>
+        <!-- Controls -->
+        <div class="card">
+            <div class="section-title">System Controls</div>
 
-    <div id="metrics">
-        <div class="card"><h3>Sent</h3><p id="packetsSent">0</p></div>
-        <div class="card"><h3>Dropped</h3><p id="packetsDropped">0</p></div>
-        <div class="card"><h3>Latency</h3><p id="latency">0</p></div>
-        <div class="card"><h3>Server1</h3><p id="server1Load">0</p></div>
-        <div class="card"><h3>Server2</h3><p id="server2Load">0</p></div>
+            <div style="margin-bottom:16px">
+                <div class="card-title">Node Startup</div>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" onclick="startRouter()">Start Router</button>
+                    <button class="btn btn-success btn-sm" onclick="startServer1()">Start S1</button>
+                    <button class="btn btn-success btn-sm" onclick="startServer2()">Start S2</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom:16px">
+                <div class="card-title">Traffic</div>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" onclick="startAutoTraffic()">▶ Start Traffic</button>
+                    <button class="btn btn-danger btn-sm" onclick="stopAutoTraffic()">■ Stop</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom:16px">
+                <div class="card-title">Routing Algorithm</div>
+                <div class="btn-group">
+                    <select id="routingAlgo">
+                        <option value="ROUND_ROBIN">Round Robin</option>
+                        <option value="LEAST_LOAD">Least Load</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="updateRouting()">Apply</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="card-title">Simulation Parameters</div>
+                <div class="slider-group">
+                    <div class="slider-row">
+                        <span class="slider-label">Drop Rate</span>
+                        <input type="range" min="0" max="50" value="10" id="dropRate">
+                        <span class="slider-val" id="dropValue">10%</span>
+                    </div>
+                    <div class="slider-row">
+                        <span class="slider-label">Min Latency</span>
+                        <input type="range" min="10" max="200" value="50" id="minLatency">
+                        <span class="slider-val" id="minValue">50ms</span>
+                    </div>
+                    <div class="slider-row">
+                        <span class="slider-label">Max Latency</span>
+                        <input type="range" min="100" max="1000" value="300" id="maxLatency">
+                        <span class="slider-val" id="maxValue">300ms</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px">
+                    <button class="btn btn-ghost btn-sm" onclick="updateConfig()">Apply Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Health -->
+        <div class="card">
+            <div class="section-title">Server Health</div>
+
+            <div class="server-health down" id="s1health">
+                <div class="server-indicator"></div>
+                <div class="server-name">Server 1</div>
+                <div class="server-load-num" id="server1Load">0</div>
+                <div class="server-status-text" id="s1status">OFFLINE</div>
+            </div>
+            <div style="margin-bottom:12px; display:flex; gap:8px;">
+                <button class="btn btn-success btn-sm" onclick="toggleServer(1,true)">▲ Up</button>
+                <button class="btn btn-danger btn-sm" onclick="toggleServer(1,false)">▼ Down</button>
+            </div>
+
+            <div class="server-health down" id="s2health">
+                <div class="server-indicator"></div>
+                <div class="server-name">Server 2</div>
+                <div class="server-load-num" id="server2Load">0</div>
+                <div class="server-status-text" id="s2status">OFFLINE</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-success btn-sm" onclick="toggleServer(2,true)">▲ Up</button>
+                <button class="btn btn-danger btn-sm" onclick="toggleServer(2,false)">▼ Down</button>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card">
+            <div class="section-title">Throughput — Packets/sec</div>
+            <div id="chartContainer">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+
     </div>
+
+    <!-- ROW 3: NETWORK FLOW -->
+    <div class="card full">
+        <div class="section-title">Network Flow</div>
+        <div id="network">
+            <svg id="netSvg"></svg>
+            <div class="node" id="client">CLIENT</div>
+            <div class="node" id="routerNode">ROUTER</div>
+            <div class="node" id="server1Node">SERVER 1</div>
+            <div class="node" id="server2Node">SERVER 2</div>
+        </div>
+    </div>
+
+    <!-- ROW 4: LOGS -->
+    <div class="card full">
+        <div class="section-title">System Logs</div>
+        <div id="logs"></div>
+    </div>
+
 </div>
 
-<div id="chartContainer">
-    <canvas id="chart"></canvas>
-</div>
-
-<h2>Network Flow</h2>
-
-<div id="network">
-    <div class="node" id="client">Client</div>
-    <div class="node" id="router">Router</div>
-    <div class="node" id="server1Node">Server1</div>
-    <div class="node" id="server2Node">Server2</div>
-</div>
-
-<h2>System Logs</h2>
-<div id="logs"></div>
+<div class="status-toast" id="toast"></div>
 
 <script>
-let smoothed = 0;
+let smoothed  = 0;
 let chart;
 let lastValue = 0;
+let toastTimer;
 
-function status(msg){
-    document.getElementById("status").innerText = msg;
+/* ── THEME TOGGLE ── */
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light');
+    document.getElementById('themeIcon').textContent  = isLight ? '🌙' : '☀️';
+    document.getElementById('themeLabel').textContent = isLight ? 'Dark' : 'Light';
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
 }
 
-async function safeFetch(url, options){
-    try{
+// restore saved preference
+(function() {
+    if (localStorage.getItem('theme') === 'light') {
+        document.body.classList.add('light');
+        document.getElementById('themeIcon').textContent  = '🌙';
+        document.getElementById('themeLabel').textContent = 'Dark';
+    }
+})();
+
+/* ── TOAST ── */
+function status(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── ANIMATED COUNTER ── */
+function animateValue(el, newVal) {
+    if (parseInt(el.textContent) === newVal) return;
+    el.textContent = newVal;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+}
+
+/* ── FETCH ── */
+async function safeFetch(url, options) {
+    try {
         const res = await fetch(url, options);
-        if (!res.ok) {
-            status("Request failed: " + res.status);
-            return null;
-        }
+        if (!res.ok) { status('Request failed: ' + res.status); return null; }
         return res;
-    }catch(e){
-        status("Server not reachable");
+    } catch(e) {
+        status('Server not reachable');
         return null;
     }
 }
 
-/* ---------- ACTIONS ---------- */
+/* ── ACTIONS ── */
+async function startRouter()      { const r = await safeFetch('/api/router/start',  {method:'POST'}); if(r) status('Router started'); }
+async function startServer1()     { const r = await safeFetch('/api/server/start/1',{method:'POST'}); if(r) status('Server1 started'); }
+async function startServer2()     { const r = await safeFetch('/api/server/start/2',{method:'POST'}); if(r) status('Server2 started'); }
+async function startAutoTraffic() { const r = await safeFetch('/api/traffic/start', {method:'POST'}); if(r) status('Traffic started'); }
+async function stopAutoTraffic()  { const r = await safeFetch('/api/traffic/stop',  {method:'POST'}); if(r) status('Traffic stopped'); }
 
-async function startRouter(){
-    const res = await safeFetch('/api/router/start', {method:'POST'});
-    if (res) status("Router started");
-}
-
-async function startServer1(){
-    const res = await safeFetch('/api/server/start/1', {method:'POST'});
-    if (res) status("Server1 started");
-}
-
-async function startServer2(){
-    const res = await safeFetch('/api/server/start/2', {method:'POST'});
-    if (res) status("Server2 started");
-}
-
-async function startAutoTraffic(){
-    const res = await safeFetch('/api/traffic/start', {method:'POST'});
-    if (res) status("Auto traffic started");
-}
-
-async function stopAutoTraffic(){
-    const res = await safeFetch('/api/traffic/stop', {method:'POST'});
-    if (res) status("Traffic stopped");
-}
-
-async function toggleServer(id, up){
-    const res = await safeFetch('/api/server/toggle', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: `id=${id}&up=${up ? 'true' : 'false'}`
+async function toggleServer(id, up) {
+    const r = await safeFetch('/api/server/toggle', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:`id=${id}&up=${up}`
     });
-
-    if (res) status("Server " + id + (up ? " started" : " stopped"));
+    if(r) status('Server ' + id + (up ? ' UP' : ' DOWN'));
 }
 
-async function updateRouting(){
-    const algo = document.getElementById("routingAlgo").value;
-    const res = await safeFetch(`/api/routing?algo=${algo}`, {method:'POST'});
-    if (res) status("Routing set to " + algo);
+async function updateRouting() {
+    const algo = document.getElementById('routingAlgo').value;
+    const r = await safeFetch(`/api/routing?algo=${algo}`, {method:'POST'});
+    if(r) status('Routing: ' + algo);
 }
 
-/* ---------- CONFIG ---------- */
-
-const drop = document.getElementById("dropRate");
-const minL = document.getElementById("minLatency");
-const maxL = document.getElementById("maxLatency");
-
-drop.oninput = () => document.getElementById("dropValue").innerText = drop.value + "%";
-minL.oninput = () => document.getElementById("minValue").innerText = minL.value;
-maxL.oninput = () => document.getElementById("maxValue").innerText = maxL.value;
-
-async function updateConfig(){
-    const dropRate = drop.value / 100;
-    const res = await safeFetch(
-        `/api/config?dropRate=${dropRate}&minLatency=${minL.value}&maxLatency=${maxL.value}`,
-        {method:'POST'}
-    );
-    if (res) status("Simulation updated");
+async function updateConfig() {
+    const dropRate = document.getElementById('dropRate').value / 100;
+    const minL     = document.getElementById('minLatency').value;
+    const maxL     = document.getElementById('maxLatency').value;
+    const r = await safeFetch(`/api/config?dropRate=${dropRate}&minLatency=${minL}&maxLatency=${maxL}`, {method:'POST'});
+    if(r) status('Config updated');
 }
 
-/* ---------- LOGS ---------- */
+/* ── SLIDERS ── */
+document.getElementById('dropRate').oninput   = e => document.getElementById('dropValue').textContent = e.target.value + '%';
+document.getElementById('minLatency').oninput = e => document.getElementById('minValue').textContent  = e.target.value + 'ms';
+document.getElementById('maxLatency').oninput = e => document.getElementById('maxValue').textContent  = e.target.value + 'ms';
 
-async function fetchLogs(){
-    try{
-        const res = await fetch('/api/logs');
-        if (!res.ok) return;
-
-        const logs = await res.json();
-        const box = document.getElementById("logs");
-        box.innerHTML = "";
-
-        logs.forEach(l => {
-            const d = document.createElement("div");
-            d.textContent = l;
-            box.appendChild(d);
-        });
-
-        box.scrollTop = box.scrollHeight;
-    }catch(e){
-        // ignore transient polling errors
-    }
-}
-setInterval(fetchLogs, 1000);
-
-/* ---------- CHART ---------- */
-
-function initChart(){
-    const ctx = document.getElementById("chart");
-
-    chart = new Chart(ctx,{
-        type:'line',
-        data:{
-            labels:[],
-            datasets:[{
-                label:'Packets/sec',
-                data:[],
-                borderColor:'blue',
-                tension:0.4
+/* ── CHART ── */
+function initChart() {
+    const ctx = document.getElementById('chart');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Packets/sec',
+                data: [],
+                borderColor: '#00d4ff',
+                backgroundColor: 'rgba(0,212,255,0.08)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 3,
+                pointBackgroundColor: '#00d4ff',
+                borderWidth: 2
             }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: {
+                    grid: { color: 'rgba(128,128,128,0.1)' },
+                    ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } },
+                    beginAtZero: true
+                }
+            },
+            animation: { duration: 300 }
         }
     });
 }
 
-/* ---------- METRICS ---------- */
+/* ── WEBSOCKET ── */
+const socket      = new SockJS('/ws');
+const stompClient = Stomp.over(socket);
+stompClient.debug = null;
 
-async function fetchMetrics(){
-    try{
-        const res = await fetch('/api/metrics');
-        if (!res.ok) return;
+stompClient.connect({}, function() {
+    const dot = document.getElementById('wsDot');
+    dot.style.background = '#10b981';
+    dot.style.boxShadow  = '0 0 8px #10b981';
+    document.getElementById('wsStatus').textContent = 'live';
 
-        const d = await res.json();
+    stompClient.subscribe('/topic/metrics', function(msg) {
+        const d = JSON.parse(msg.body);
 
-        document.getElementById("packetsSent").innerText = d.packetsSent;
-        document.getElementById("packetsDropped").innerText = d.packetsDropped;
-        document.getElementById("latency").innerText = d.avgLatency.toFixed(1);
-        document.getElementById("server1Load").innerText = d.server1Load;
-        document.getElementById("server2Load").innerText = d.server2Load;
+        animateValue(document.getElementById('packetsSent'),      d.packetsSent);
+        animateValue(document.getElementById('packetsDropped'),   d.packetsDropped);
+        animateValue(document.getElementById('packetsProcessed'), d.packetsProcessed);
+        animateValue(document.getElementById('queueSizeVal'),     d.queueSize);
+        document.getElementById('latency').textContent = d.avgLatency.toFixed(1);
 
-        const current = d.packetsProcessed;
-        const delta = current - lastValue;
-        lastValue = current;
+        const pct = Math.min((d.queueSize / 100) * 100, 100);
+        const bar = document.getElementById('queueBar');
+        bar.style.width = pct + '%';
+        bar.className   = 'queue-bar-fill' + (pct > 80 ? ' full' : pct > 50 ? ' warn' : '');
 
-        const baseline = Math.random() * 0.5;
-        const value = Math.max(delta, baseline);
+        const delta = d.packetsProcessed - lastValue;
+        lastValue   = d.packetsProcessed;
+        smoothed    = smoothed * 0.6 + Math.max(delta, Math.random() * 0.3) * 0.4;
 
-        smoothed = smoothed * 0.6 + value * 0.4;
-
-        chart.data.labels.push("");
+        chart.data.labels.push('');
         chart.data.datasets[0].data.push(smoothed);
-
-        if(chart.data.labels.length > 25){
+        if (chart.data.labels.length > 30) {
             chart.data.labels.shift();
             chart.data.datasets[0].data.shift();
         }
-
         chart.update();
-    }catch(e){
-        // ignore transient polling errors
-    }
+
+        animateValue(document.getElementById('server1Load'), d.server1Load);
+        animateValue(document.getElementById('server2Load'), d.server2Load);
+    });
+
+}, function() {
+    document.getElementById('wsStatus').textContent = 'disconnected';
+});
+
+/* ── LOGS ── */
+async function fetchLogs() {
+    try {
+        const res = await fetch('/api/logs');
+        if (!res.ok) return;
+        const logs = await res.json();
+        const box  = document.getElementById('logs');
+        box.innerHTML = '';
+        logs.slice(-60).forEach(l => {
+            const d = document.createElement('div');
+            d.className = 'log-line ' + (l.includes('[WARN]') ? 'warn' : l.includes('[ERROR]') ? 'error' : 'info');
+            d.textContent = l;
+            box.appendChild(d);
+        });
+        box.scrollTop = box.scrollHeight;
+    } catch(e) {}
 }
-setInterval(fetchMetrics, 1000);
+setInterval(fetchLogs, 1000);
 
-/* ---------- FLOW ---------- */
-
-async function fetchFlows(){
-    try{
+/* ── FLOW ── */
+async function fetchFlows() {
+    try {
         const [flowRes, statusRes] = await Promise.all([
             fetch('/api/flows'),
             fetch('/api/server/status')
         ]);
-
         if (!flowRes.ok || !statusRes.ok) return;
 
-        const flows = await flowRes.json();
+        const flows        = await flowRes.json();
         const serverStatus = await statusRes.json();
 
-        document.getElementById("server1Node").classList.toggle("down", !serverStatus.server1);
-        document.getElementById("server2Node").classList.toggle("down", !serverStatus.server2);
+        const s1up = serverStatus.server1;
+        const s2up = serverStatus.server2;
+
+        const s1h = document.getElementById('s1health');
+        s1h.className = 'server-health ' + (s1up ? 'up' : 'down');
+        document.getElementById('s1status').textContent = s1up ? 'ONLINE' : 'OFFLINE';
+        document.getElementById('server1Node').classList.toggle('down', !s1up);
+
+        const s2h = document.getElementById('s2health');
+        s2h.className = 'server-health ' + (s2up ? 'up' : 'down');
+        document.getElementById('s2status').textContent = s2up ? 'ONLINE' : 'OFFLINE';
+        document.getElementById('server2Node').classList.toggle('down', !s2up);
 
         flows.forEach(f => {
-            if (f === "CLIENT_ROUTER") animate(80,130,380,130);
-            if (f === "ROUTER_SERVER1" && serverStatus.server1) animate(400,130,720,70);
-            if (f === "ROUTER_SERVER2" && serverStatus.server2) animate(400,130,720,190);
+            if (f === 'CLIENT_ROUTER')              animatePacket('client',     'routerNode');
+            if (f === 'ROUTER_SERVER1' && s1up)     animatePacket('routerNode', 'server1Node');
+            if (f === 'ROUTER_SERVER2' && s2up)     animatePacket('routerNode', 'server2Node');
         });
-    }catch(e){
-        // ignore transient polling errors
-    }
+    } catch(e) {}
 }
 setInterval(fetchFlows, 800);
 
-/* ---------- ANIMATION ---------- */
-
-function animate(x1,y1,x2,y2){
-    const p = document.createElement("div");
-    p.className = "packet";
-    p.style.left = x1 + "px";
-    p.style.top = y1 + "px";
-
-    document.getElementById("network").appendChild(p);
-
-    let t = 0;
-
-    const i = setInterval(() => {
-        t += 0.05;
-        p.style.left = x1 + (x2-x1)*t + "px";
-        p.style.top = y1 + (y2-y1)*t + "px";
-
-        if(t >= 1){
-            p.remove();
-            clearInterval(i);
-        }
-    }, 30);
+/* ── PACKET ANIMATION ── */
+function getCenter(id) {
+    const net  = document.getElementById('network');
+    const node = document.getElementById(id);
+    const nr   = net.getBoundingClientRect();
+    const r    = node.getBoundingClientRect();
+    return { x: r.left - nr.left + r.width/2, y: r.top - nr.top + r.height/2 };
 }
 
-/* ---------- INIT ---------- */
+function animatePacket(fromId, toId) {
+    const from = getCenter(fromId);
+    const to   = getCenter(toId);
+    const p    = document.createElement('div');
+    p.className  = 'packet';
+    p.style.left = from.x + 'px';
+    p.style.top  = from.y + 'px';
+    document.getElementById('network').appendChild(p);
+    let t = 0;
+    const iv = setInterval(() => {
+        t += 0.06;
+        p.style.left = (from.x + (to.x - from.x) * t) + 'px';
+        p.style.top  = (from.y + (to.y - from.y) * t) + 'px';
+        if (t >= 1) { p.remove(); clearInterval(iv); }
+    }, 25);
+}
 
+/* ── INIT ── */
 window.onload = initChart;
 </script>
-
 </body>
 </html>

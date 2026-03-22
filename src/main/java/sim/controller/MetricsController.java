@@ -1,6 +1,8 @@
 package sim.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import sim.metrics.LogStore;
 import sim.metrics.MetricsStore;
@@ -45,4 +47,12 @@ public class MetricsController {
                 "avgLatency",       metricsStore.avgLatency()
         );
     }
+
+    @PostMapping("/api/metrics/server-handled")
+public void serverHandled(@RequestParam(name = "serverId") int serverId) {
+    if (serverId == 1)
+        metricsStore.server1Handled();
+    else
+        metricsStore.server2Handled();
+}
 }

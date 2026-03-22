@@ -4,9 +4,9 @@ import org.springframework.stereotype.Service;
 import sim.client.TrafficSimulator;
 import sim.config.Ports;
 import sim.metrics.MetricsStore;
+import sim.metrics.PacketFlowStore;
 import sim.router.Router;
 import sim.server.ServerNode;
-
 
 @Service
 public class SimulatorService {
@@ -71,6 +71,7 @@ public class SimulatorService {
     public void stopTraffic() {
         running = false;
         if (trafficThread != null) trafficThread.interrupt();
+        PacketFlowStore.clear(); // clears animation on stop
         System.out.println("Traffic STOPPED");
     }
 }
