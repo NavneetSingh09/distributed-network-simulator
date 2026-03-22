@@ -1,0 +1,43 @@
+version: '3.8'
+
+networks:
+  sim-network:
+    driver: bridge
+
+services:
+
+  server1:
+    build: .
+    container_name: server1
+    environment:
+      - NODE_ROLE=server1
+      - SERVER1_HOST=server1
+      - SERVER2_HOST=server2
+    networks:
+      - sim-network
+
+  server2:
+    build: .
+    container_name: server2
+    environment:
+      - NODE_ROLE=server2
+      - SERVER1_HOST=server1
+      - SERVER2_HOST=server2
+    networks:
+      - sim-network
+
+  router:
+    build: .
+    container_name: router
+    environment:
+      - NODE_ROLE=router
+      - SERVER1_HOST=server1
+      - SERVER2_HOST=server2
+    ports:
+      - "8080:8080"   # REST API + frontend
+      - "5000:5000"   # Router socket
+    depends_on:
+      - server1
+      - server2
+    networks:
+      - sim-network

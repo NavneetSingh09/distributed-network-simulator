@@ -197,7 +197,10 @@ public class Router {
 
   
     private boolean forwardToServer(Packet packet, int port) {
-        try (Socket serverSocket = new Socket("localhost", port);
+    String host = (port == Ports.SERVER1_PORT)
+            ? Ports.getServer1Host()
+            : Ports.getServer2Host();
+    try (Socket serverSocket = new Socket(host, port);
              PrintWriter writer = new PrintWriter(serverSocket.getOutputStream(), true)) {
             writer.println(packet.serialize());
             return true;
