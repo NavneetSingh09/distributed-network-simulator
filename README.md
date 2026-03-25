@@ -75,7 +75,7 @@ Each node runs as a **separate Docker container** on a shared virtual network (`
 ### Run with Docker (Recommended)
 
 ```bash
-git clone https://github.com/yourusername/distributed-network-sim.git
+git clone https://github.com/NavneetSingh09/distributed-network-simulator.git
 cd distributed-network-sim
 docker-compose up --build
 ```
