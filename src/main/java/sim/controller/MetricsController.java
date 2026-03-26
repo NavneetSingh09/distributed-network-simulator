@@ -55,4 +55,13 @@ public void serverHandled(@RequestParam(name = "serverId") int serverId) {
     else
         metricsStore.server2Handled();
 }
+
+@GetMapping("/api/health")
+public Map<String, Object> health() {
+    return Map.of(
+        "status",    "UP",
+        "timestamp", java.time.Instant.now().toString(),
+        "version",   "2.0"
+    );
+}
 }
