@@ -43,4 +43,16 @@ public class MetricsStore {
     public synchronized int getPacketsDequeued()  { return packetsDequeued; }  // added Phase 2
     public synchronized int getServer1Load()      { return server1Load; }
     public synchronized int getServer2Load()      { return server2Load; }
+
+    public synchronized void reset() {
+    packetsSent      = 0;
+    packetsDropped   = 0;
+    packetsProcessed = 0;
+    packetsQueued    = 0;
+    packetsDequeued  = 0;
+    server1Load      = 0;
+    server2Load      = 0;
+    totalLatency     = 0;
+    latencySamples   = 0;
+}
 }

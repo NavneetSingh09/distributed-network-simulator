@@ -537,9 +537,10 @@ select:focus { border-color: var(--accent); }
             <div style="margin-bottom:16px">
                 <div class="card-title">Traffic</div>
                 <div class="btn-group">
-                    <button class="btn btn-primary btn-sm" onclick="startAutoTraffic()">▶ Start Traffic</button>
-                    <button class="btn btn-danger btn-sm" onclick="stopAutoTraffic()">■ Stop</button>
-                </div>
+    <button class="btn btn-primary btn-sm" onclick="startAutoTraffic()">▶ Start Traffic</button>
+    <button class="btn btn-danger btn-sm" onclick="stopAutoTraffic()">■ Stop</button>
+    <button class="btn btn-ghost btn-sm" onclick="resetMetrics()">↺ Reset</button>
+</div>
             </div>
 
             <div style="margin-bottom:16px">
@@ -883,6 +884,12 @@ function animatePacket(fromId, toId) {
         p.style.top  = (from.y + (to.y - from.y) * t) + 'px';
         if (t >= 1) { p.remove(); clearInterval(iv); }
     }, 25);
+}
+
+async function resetMetrics() {
+    if (!confirm('Reset all metrics to zero?')) return;
+    const r = await safeFetch('/api/metrics/reset', {method:'POST'});
+    if(r) status('Metrics reset');
 }
 
 /* ── INIT ── */

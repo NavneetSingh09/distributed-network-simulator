@@ -64,4 +64,11 @@ public Map<String, Object> health() {
         "version",   "2.0"
     );
 }
+
+@PostMapping("/api/metrics/reset")
+public String resetMetrics() {
+    metricsStore.reset();
+    PacketFlowStore.clear();
+    return "Metrics reset";
+}
 }
