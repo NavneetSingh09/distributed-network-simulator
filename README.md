@@ -4,7 +4,7 @@ A production-grade distributed systems simulator built with Java, Spring Boot, a
 
 ---
 
-## 🚀 Live Demo
+##  Live Demo
 
 **[http://3.142.129.218:8080](http://3.142.129.218:8080)** — Deployed on AWS EC2 (t2.micro) with Docker Compose
 
@@ -269,4 +269,4 @@ mvn test
 
 **Navneet Singh**
 MS Computer Science
-[LinkedIn](https://linkedin.com/in/yourprofile) · [GitHub](https://github.com/NavneetSingh09) · [Portfolio](https://yourportfolio.com)
+[LinkedIn](https://www.linkedin.com/in/navneet-kumar-singh-842429154) · [GitHub](https://github.com/NavneetSingh09) · [Portfolio](https://navneet-portfolio-rho.vercel.app/)
