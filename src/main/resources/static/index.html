@@ -151,7 +151,7 @@ body {
     opacity: 0.5;
 }
 
-.metric-card.dropped::before  { background: var(--red); }
+.metric-card.dropped::before { background: var(--red); }
 .metric-card.latency::before  { background: var(--yellow); }
 .metric-card.threat::before   { background: var(--red); }
 
@@ -204,6 +204,7 @@ body {
 .queue-bar-fill.warn { background: linear-gradient(90deg, var(--yellow), var(--red)); }
 .queue-bar-fill.full { background: var(--red); }
 
+/* ── SERVER HEALTH ── */
 .server-health {
     display: flex;
     align-items: center;
@@ -238,6 +239,23 @@ body {
 
 .server-load-num { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; color: var(--accent); }
 
+/* Circuit breaker badge */
+.cb-badge {
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid currentColor;
+    letter-spacing: 0.05em;
+    transition: color 0.3s, border-color 0.3s;
+}
+
+.cb-badge.closed    { color: var(--green); }
+.cb-badge.open      { color: var(--red); }
+.cb-badge.half-open { color: var(--yellow); }
+
+/* ── BUTTONS ── */
 .btn {
     padding: 9px 18px;
     font-size: 0.82rem;
@@ -322,17 +340,10 @@ body {
     pointer-events: none;
 }
 
-.packet.threat {
-    background: var(--red);
-    box-shadow: 0 0 6px var(--red);
-}
-
 #network svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
 .slider-group { display: flex; flex-direction: column; gap: 16px; }
-
 .slider-row { display: flex; align-items: center; gap: 14px; }
-
 .slider-label { font-size: 0.75rem; color: var(--muted); font-family: var(--font-mono); width: 100px; flex-shrink: 0; }
 
 input[type=range] { flex: 1; -webkit-appearance: none; height: 4px; border-radius: 2px; background: var(--border); outline: none; }
@@ -353,14 +364,14 @@ select:focus { border-color: var(--accent); }
 }
 
 #logs::-webkit-scrollbar { width: 4px; }
-#logs::-webkit-scrollbar-track { background: transparent; }
 #logs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .log-line { padding: 2px 0; color: var(--muted); border-bottom: 1px solid rgba(128,128,128,0.1); }
-.log-line.info  { color: var(--muted); }
-.log-line.warn  { color: var(--yellow); }
-.log-line.error { color: var(--red); }
-.log-line.dpi   { color: var(--accent); }
+.log-line.info    { color: var(--muted); }
+.log-line.warn    { color: var(--yellow); }
+.log-line.error   { color: var(--red); }
+.log-line.dpi     { color: var(--accent); }
+.log-line.circuit { color: #f97316; }
 
 #chartContainer { position: relative; height: 200px; }
 
@@ -376,7 +387,6 @@ select:focus { border-color: var(--accent); }
     border-bottom: 1px solid var(--border);
 }
 
-/* Threat log */
 #threatLog {
     height: 220px;
     overflow-y: auto;
@@ -405,7 +415,7 @@ select:focus { border-color: var(--accent); }
 <body>
 
 <div class="header">
-    <div class="header-title">DIST<span>/</span>NET<span>-</span>SIM <span>v3.0 — DPI</span></div>
+    <div class="header-title">DIST<span>/</span>NET<span>-</span>SIM <span>v3.0 — DPI + Circuit Breaker</span></div>
     <div class="header-right">
         <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
             <span id="themeIcon">☀️</span>
@@ -517,14 +527,16 @@ select:focus { border-color: var(--accent); }
             </div>
         </div>
 
+        <!-- Server Health + Circuit Breaker -->
         <div class="card">
-            <div class="section-title">Server Health</div>
+            <div class="section-title">Server Health + Circuit Breaker</div>
 
             <div class="server-health down" id="s1health">
                 <div class="server-indicator"></div>
                 <div class="server-name">Server 1</div>
                 <div class="server-load-num" id="server1Load">0</div>
                 <div class="server-status-text" id="s1status">OFFLINE</div>
+                <div class="cb-badge closed" id="s1circuit">CLOSED</div>
             </div>
             <div style="margin-bottom:12px; display:flex; gap:8px;">
                 <button class="btn btn-success btn-sm" onclick="toggleServer(1,true)">▲ Up</button>
@@ -536,6 +548,7 @@ select:focus { border-color: var(--accent); }
                 <div class="server-name">Server 2</div>
                 <div class="server-load-num" id="server2Load">0</div>
                 <div class="server-status-text" id="s2status">OFFLINE</div>
+                <div class="cb-badge closed" id="s2circuit">CLOSED</div>
             </div>
             <div style="display:flex; gap:8px;">
                 <button class="btn btn-success btn-sm" onclick="toggleServer(2,true)">▲ Up</button>
@@ -566,7 +579,6 @@ select:focus { border-color: var(--accent); }
 
     <!-- ROW 4: DPI -->
     <div class="grid-2">
-
         <div class="card">
             <div class="section-title">Protocol Distribution — Deep Packet Inspection</div>
             <div style="position:relative; height:220px;">
@@ -578,7 +590,6 @@ select:focus { border-color: var(--accent); }
             <div class="section-title">🔴 Threat Log</div>
             <div id="threatLog"></div>
         </div>
-
     </div>
 
     <!-- ROW 5: LOGS -->
@@ -685,6 +696,14 @@ document.getElementById('dropRate').oninput   = e => document.getElementById('dr
 document.getElementById('minLatency').oninput = e => document.getElementById('minValue').textContent  = e.target.value + 'ms';
 document.getElementById('maxLatency').oninput = e => document.getElementById('maxValue').textContent  = e.target.value + 'ms';
 
+/* ── CIRCUIT BREAKER ── */
+function updateCircuit(id, state) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = state;
+    el.className = 'cb-badge ' + state.toLowerCase().replace('_', '-');
+}
+
 /* ── THROUGHPUT CHART ── */
 function initChart() {
     const ctx = document.getElementById('chart');
@@ -730,14 +749,7 @@ function initDpiChart() {
             labels: ['HTTP', 'DNS', 'FTP', 'ICMP', 'UNKNOWN', 'SUSPICIOUS'],
             datasets: [{
                 data: [0, 0, 0, 0, 0, 0],
-                backgroundColor: [
-                    '#00d4ff',
-                    '#10b981',
-                    '#f59e0b',
-                    '#7c3aed',
-                    '#64748b',
-                    '#ef4444'
-                ],
+                backgroundColor: ['#00d4ff','#10b981','#f59e0b','#7c3aed','#64748b','#ef4444'],
                 borderWidth: 0,
                 hoverOffset: 6
             }]
@@ -801,7 +813,6 @@ stompClient.connect({}, function() {
         animateValue(document.getElementById('server1Load'), d.server1Load);
         animateValue(document.getElementById('server2Load'), d.server2Load);
 
-        // DPI protocol chart
         if (d.protocols && dpiChart) {
             dpiChart.data.datasets[0].data = [
                 d.protocols.HTTP       || 0,
@@ -830,9 +841,10 @@ async function fetchLogs() {
         logs.slice(-60).forEach(l => {
             const d = document.createElement('div');
             d.className = 'log-line ' +
-                (l.includes('[WARN]')  ? 'warn'  :
-                 l.includes('[ERROR]') ? 'error' :
-                 l.includes('[DPI]')   ? 'dpi'   : 'info');
+                (l.includes('[WARN]')    ? 'warn'    :
+                 l.includes('[ERROR]')   ? 'error'   :
+                 l.includes('[DPI]')     ? 'dpi'     :
+                 l.includes('[CIRCUIT]') ? 'circuit' : 'info');
             d.textContent = l;
             box.appendChild(d);
         });
@@ -864,12 +876,13 @@ async function fetchThreats() {
 }
 setInterval(fetchThreats, 1000);
 
-/* ── FLOW ── */
+/* ── FLOW + CIRCUIT BREAKER STATUS ── */
 async function fetchFlows() {
     try {
-        const [flowRes, statusRes] = await Promise.all([
+        const [flowRes, statusRes, cbRes] = await Promise.all([
             fetch('/api/flows'),
-            fetch('/api/server/status')
+            fetch('/api/server/status'),
+            fetch('/api/circuit')
         ]);
         if (!flowRes.ok || !statusRes.ok) return;
 
@@ -888,6 +901,13 @@ async function fetchFlows() {
         s2h.className = 'server-health ' + (s2up ? 'up' : 'down');
         document.getElementById('s2status').textContent = s2up ? 'ONLINE' : 'OFFLINE';
         document.getElementById('server2Node').classList.toggle('down', !s2up);
+
+        // Circuit breaker badges
+        if (cbRes && cbRes.ok) {
+            const cb = await cbRes.json();
+            updateCircuit('s1circuit', cb.server1);
+            updateCircuit('s2circuit', cb.server2);
+        }
 
         flows.forEach(f => {
             if (f === 'CLIENT_ROUTER')          animatePacket('client',     'routerNode');

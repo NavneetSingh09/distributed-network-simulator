@@ -20,6 +20,8 @@ import java.net.Socket;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import sim.circuitbreaker.CircuitBreaker;
+import sim.circuitbreaker.CircuitBreakerRegistry;
 
 @Component
 public class Router {
@@ -34,26 +36,29 @@ public class Router {
     private final PacketQueue        packetQueue;
     private final PacketClassifier   packetClassifier;
     private final DpiStore           dpiStore;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private volatile int currentServer = 0;
     private final Random random = new Random();
 
     public Router(SimulationConfig simulationConfig,
-                  RoutingConfig routingConfig,
-                  ServerStatusConfig serverStatusConfig,
-                  MetricsStore metricsStore,
-                  PacketQueue packetQueue,
-                  PacketClassifier packetClassifier,
-                  DpiStore dpiStore) {
-        this.simulationConfig   = simulationConfig;
-        this.routingConfig      = routingConfig;
-        this.serverStatusConfig = serverStatusConfig;
-        this.metricsStore       = metricsStore;
-        this.packetQueue        = packetQueue;
-        this.packetClassifier   = packetClassifier;
-        this.dpiStore           = dpiStore;
-    }
+              RoutingConfig routingConfig,
+              ServerStatusConfig serverStatusConfig,
+              MetricsStore metricsStore,
+              PacketQueue packetQueue,
+              PacketClassifier packetClassifier,
+              DpiStore dpiStore,
+              CircuitBreakerRegistry circuitBreakerRegistry) {
+    this.simulationConfig       = simulationConfig;
+    this.routingConfig          = routingConfig;
+    this.serverStatusConfig     = serverStatusConfig;
+    this.metricsStore           = metricsStore;
+    this.packetQueue            = packetQueue;
+    this.packetClassifier       = packetClassifier;
+    this.dpiStore               = dpiStore;
+    this.circuitBreakerRegistry = circuitBreakerRegistry;
+}
 
     public void start() {
         Thread dispatcher = new Thread(this::dispatchLoop, "router-dispatcher");
@@ -137,46 +142,61 @@ public class Router {
     }
 
     private void forwardWithRetry(Packet packet) {
-        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 
-            int serverPort = getNextServer();
+        int serverPort = getNextServer();
 
-            if (serverPort == -1) {
-                Log.warn("ROUTER", "No servers available. Attempt " + attempt + "/" + MAX_RETRIES);
-
-                if (attempt == MAX_RETRIES) {
-                    Log.error("ROUTER", "All retries exhausted — dropping packet: " + packet.getPacketId());
-                    metricsStore.packetDropped();
-                    return;
-                }
-
-                sleep(RETRY_DELAY_MS);
-                continue;
-            }
-
-            long latency = simulateLatency();
-            metricsStore.recordLatency(latency);
-
-            boolean success = forwardToServer(packet, serverPort);
-
-            if (success) {
-                if (serverPort == Ports.SERVER1_PORT)
-                    PacketFlowStore.add("ROUTER_SERVER1");
-                else
-                    PacketFlowStore.add("ROUTER_SERVER2");
-
-                metricsStore.packetProcessed();
-                Log.info("ROUTER", "Packet delivered on attempt " + attempt + ": " + packet.getPacketId());
+        if (serverPort == -1) {
+            Log.warn("ROUTER", "No servers available. Attempt " + attempt + "/" + MAX_RETRIES);
+            if (attempt == MAX_RETRIES) {
+                Log.error("ROUTER", "All retries exhausted — dropping: " + packet.getPacketId());
+                metricsStore.packetDropped();
                 return;
             }
-
-            Log.warn("ROUTER", "Forward failed. Attempt " + attempt + "/" + MAX_RETRIES);
             sleep(RETRY_DELAY_MS);
+            continue;
         }
 
-        Log.error("ROUTER", "All retries exhausted — dropping packet: " + packet.getPacketId());
-        metricsStore.packetDropped();
+        // Check circuit breaker
+        CircuitBreaker cb = circuitBreakerRegistry.forPort(serverPort);
+        if (!cb.allowRequest()) {
+            Log.warn("CIRCUIT", "Circuit OPEN for " + cb.getName() + " — skipping");
+            // Try the other server
+            serverPort = (serverPort == Ports.SERVER1_PORT)
+                    ? Ports.SERVER2_PORT : Ports.SERVER1_PORT;
+            cb = circuitBreakerRegistry.forPort(serverPort);
+            if (!cb.allowRequest()) {
+                Log.error("CIRCUIT", "Both circuits OPEN — dropping packet");
+                metricsStore.packetDropped();
+                return;
+            }
+        }
+
+        long latency = simulateLatency();
+        metricsStore.recordLatency(latency);
+
+        boolean success = forwardToServer(packet, serverPort);
+
+        if (success) {
+            cb.recordSuccess();
+            if (serverPort == Ports.SERVER1_PORT)
+                PacketFlowStore.add("ROUTER_SERVER1");
+            else
+                PacketFlowStore.add("ROUTER_SERVER2");
+            metricsStore.packetProcessed();
+            Log.info("ROUTER", "Packet delivered on attempt " + attempt);
+            return;
+        } else {
+            cb.recordFailure();
+        }
+
+        Log.warn("ROUTER", "Forward failed. Attempt " + attempt + "/" + MAX_RETRIES);
+        sleep(RETRY_DELAY_MS);
     }
+
+    Log.error("ROUTER", "All retries exhausted — dropping: " + packet.getPacketId());
+    metricsStore.packetDropped();
+}
 
     private synchronized int getNextServer() {
         boolean s1Up = serverStatusConfig.isServer1Up();

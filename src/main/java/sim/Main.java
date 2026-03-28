@@ -12,6 +12,7 @@ import sim.metrics.MetricsStore;
 import sim.router.PacketQueue;
 import sim.router.Router;
 import sim.server.ServerNode;
+import sim.circuitbreaker.CircuitBreakerRegistry;
 
 
 public class Main {
@@ -31,12 +32,14 @@ public class Main {
         PacketQueue        packetQueue   = new PacketQueue();
         PacketClassifier   classifier  = new PacketClassifier();
         DpiStore           dpiStore    = new DpiStore();
+        CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
 
         switch (args[0]) {
 
             case "router":
-             new Router(simConfig, routingConfig, statusConfig, metrics, packetQueue, classifier, dpiStore).start();
-              break;
+    new Router(simConfig, routingConfig, statusConfig, metrics, 
+               packetQueue, classifier, dpiStore, cbRegistry).start();
+    break;
 
             case "server1":
                 new ServerNode(Ports.SERVER1_PORT, metrics).start();

@@ -1,6 +1,8 @@
 package sim.controller;
 
 import org.springframework.web.bind.annotation.*;
+
+import sim.circuitbreaker.CircuitBreakerRegistry;
 import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
@@ -16,16 +18,18 @@ public class SimulatorController {
     private final SimulationConfig   simulationConfig;
     private final RoutingConfig      routingConfig;
     private final ServerStatusConfig serverStatusConfig;
-
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
     public SimulatorController(SimulatorService simulatorService,
-                               SimulationConfig simulationConfig,
-                               RoutingConfig routingConfig,
-                               ServerStatusConfig serverStatusConfig) {
-        this.simulatorService   = simulatorService;
-        this.simulationConfig   = simulationConfig;
-        this.routingConfig      = routingConfig;
-        this.serverStatusConfig = serverStatusConfig;
-    }
+                           SimulationConfig simulationConfig,
+                           RoutingConfig routingConfig,
+                           ServerStatusConfig serverStatusConfig,
+                           CircuitBreakerRegistry circuitBreakerRegistry) {
+    this.simulatorService       = simulatorService;
+    this.simulationConfig       = simulationConfig;
+    this.routingConfig          = routingConfig;
+    this.serverStatusConfig     = serverStatusConfig;
+    this.circuitBreakerRegistry = circuitBreakerRegistry;
+}
 
     /* ================= ROUTER ================= */
 
@@ -65,14 +69,35 @@ public class SimulatorController {
 
     /* ================= TOGGLE ================= */
 
-   @PostMapping("/server/toggle")
-public String toggleServer(@RequestParam(name = "id") int id, @RequestParam(name = "up") String up) {
-        boolean isUp = "true".equalsIgnoreCase(up);
-        if (id == 1)      serverStatusConfig.setServer1Up(isUp);
-        else if (id == 2) serverStatusConfig.setServer2Up(isUp);
-        else              return "Invalid server id";
-        return "Server " + id + (isUp ? " UP" : " DOWN");
+  @PostMapping("/server/toggle")
+public String toggleServer(@RequestParam(name = "id") int id, 
+                           @RequestParam(name = "up") String up) {
+    boolean isUp = "true".equalsIgnoreCase(up);
+    if (id == 1) {
+        serverStatusConfig.setServer1Up(isUp);
+        if (!isUp) {
+            // Trip the circuit breaker immediately when server manually downed
+            circuitBreakerRegistry.forServer1().recordFailure();
+            circuitBreakerRegistry.forServer1().recordFailure();
+            circuitBreakerRegistry.forServer1().recordFailure();
+        } else {
+            // Reset circuit breaker when server brought back up
+            circuitBreakerRegistry.forServer1().recordSuccess();
+        }
+    } else if (id == 2) {
+        serverStatusConfig.setServer2Up(isUp);
+        if (!isUp) {
+            circuitBreakerRegistry.forServer2().recordFailure();
+            circuitBreakerRegistry.forServer2().recordFailure();
+            circuitBreakerRegistry.forServer2().recordFailure();
+        } else {
+            circuitBreakerRegistry.forServer2().recordSuccess();
+        }
+    } else {
+        return "Invalid server id";
     }
+    return "Server " + id + (isUp ? " UP" : " DOWN");
+}
 
     /* ================= TRAFFIC ================= */
 

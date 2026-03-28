@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import sim.circuitbreaker.CircuitBreakerRegistry;
 import sim.dpi.DpiStore;
 import sim.metrics.LogStore;
 import sim.metrics.MetricsStore;
@@ -14,17 +15,23 @@ import sim.router.PacketQueue;
 import java.util.List;
 import java.util.Map;
 
+
 @RestController
 public class MetricsController {
 
     private final MetricsStore metricsStore;
     private final PacketQueue  packetQueue;
     private final DpiStore dpiStore;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
-    public MetricsController(MetricsStore metricsStore, PacketQueue packetQueue, DpiStore dpiStore) {
-    this.metricsStore = metricsStore;
-    this.packetQueue  = packetQueue;
-    this.dpiStore     = dpiStore;
+  public MetricsController(MetricsStore metricsStore,
+                          PacketQueue packetQueue,
+                          DpiStore dpiStore,
+                          CircuitBreakerRegistry circuitBreakerRegistry) {
+    this.metricsStore           = metricsStore;
+    this.packetQueue            = packetQueue;
+    this.dpiStore               = dpiStore;
+    this.circuitBreakerRegistry = circuitBreakerRegistry;
 }
 
     @GetMapping("/api/logs")
@@ -86,4 +93,13 @@ public Map<String, Integer> getProtocolStats() {
 public List<String> getThreats() {
     return dpiStore.getThreatLog();
 }
+
+@GetMapping("/api/circuit")
+public Map<String, String> getCircuitStatus() {
+    return Map.of(
+        "server1", circuitBreakerRegistry.forServer1().getState().name(),
+        "server2", circuitBreakerRegistry.forServer2().getState().name()
+    );
+}
+
 }
