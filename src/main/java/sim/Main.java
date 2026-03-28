@@ -6,6 +6,8 @@ import sim.config.Ports;
 import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
+import sim.dpi.DpiStore;
+import sim.dpi.PacketClassifier;
 import sim.metrics.MetricsStore;
 import sim.router.PacketQueue;
 import sim.router.Router;
@@ -27,12 +29,14 @@ public class Main {
         ServerStatusConfig statusConfig  = new ServerStatusConfig();
         MetricsStore       metrics       = new MetricsStore();
         PacketQueue        packetQueue   = new PacketQueue();
+        PacketClassifier   classifier  = new PacketClassifier();
+        DpiStore           dpiStore    = new DpiStore();
 
         switch (args[0]) {
 
             case "router":
-                new Router(simConfig, routingConfig, statusConfig, metrics, packetQueue).start();
-                break;
+             new Router(simConfig, routingConfig, statusConfig, metrics, packetQueue, classifier, dpiStore).start();
+              break;
 
             case "server1":
                 new ServerNode(Ports.SERVER1_PORT, metrics).start();

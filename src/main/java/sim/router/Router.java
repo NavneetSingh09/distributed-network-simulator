@@ -5,6 +5,8 @@ import sim.config.Ports;
 import sim.config.RoutingConfig;
 import sim.config.ServerStatusConfig;
 import sim.config.SimulationConfig;
+import sim.dpi.DpiStore;
+import sim.dpi.PacketClassifier;
 import sim.metrics.MetricsStore;
 import sim.metrics.PacketFlowStore;
 import sim.model.Packet;
@@ -19,11 +21,10 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-
 @Component
 public class Router {
 
-    private static final int MAX_RETRIES  = 3;
+    private static final int MAX_RETRIES    = 3;
     private static final int RETRY_DELAY_MS = 200;
 
     private final SimulationConfig   simulationConfig;
@@ -31,6 +32,8 @@ public class Router {
     private final ServerStatusConfig serverStatusConfig;
     private final MetricsStore       metricsStore;
     private final PacketQueue        packetQueue;
+    private final PacketClassifier   packetClassifier;
+    private final DpiStore           dpiStore;
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private volatile int currentServer = 0;
@@ -40,16 +43,19 @@ public class Router {
                   RoutingConfig routingConfig,
                   ServerStatusConfig serverStatusConfig,
                   MetricsStore metricsStore,
-                  PacketQueue packetQueue) {
+                  PacketQueue packetQueue,
+                  PacketClassifier packetClassifier,
+                  DpiStore dpiStore) {
         this.simulationConfig   = simulationConfig;
         this.routingConfig      = routingConfig;
         this.serverStatusConfig = serverStatusConfig;
         this.metricsStore       = metricsStore;
         this.packetQueue        = packetQueue;
+        this.packetClassifier   = packetClassifier;
+        this.dpiStore           = dpiStore;
     }
 
     public void start() {
-        // Start the dispatcher thread that drains the queue
         Thread dispatcher = new Thread(this::dispatchLoop, "router-dispatcher");
         dispatcher.setDaemon(true);
         dispatcher.start();
@@ -67,7 +73,6 @@ public class Router {
         }
     }
 
-    
     private void receivePacket(Socket clientSocket) {
         try (clientSocket;
              BufferedReader reader = new BufferedReader(
@@ -79,6 +84,19 @@ public class Router {
             Packet packet = Packet.deserialize(data);
             Log.info("ROUTER", "Packet received: " + packet.getPacketId());
             PacketFlowStore.add("CLIENT_ROUTER");
+
+            // ── DPI INSPECTION ──
+            PacketClassifier.Protocol protocol = packetClassifier.classify(packet.getFrame());
+            dpiStore.recordProtocol(protocol);
+            Log.info("DPI", "Packet " + packet.getPacketId() + " → " + protocol);
+
+            // Block suspicious packets immediately
+            if (protocol == PacketClassifier.Protocol.SUSPICIOUS) {
+                Log.warn("DPI", "THREAT BLOCKED: " + packet.getPacketId());
+                dpiStore.recordThreat(packet.getPacketId(), packet.getFrame());
+                metricsStore.packetDropped();
+                return;
+            }
 
             // Simulate packet drop BEFORE enqueuing
             if (random.nextDouble() < simulationConfig.getDropRate()) {
@@ -101,14 +119,13 @@ public class Router {
         }
     }
 
-    
     private void dispatchLoop() {
         Log.info("ROUTER", "Dispatcher started");
 
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 Packet packet = packetQueue.dequeue(500);
-                if (packet == null) continue; // timeout, loop again
+                if (packet == null) continue;
 
                 metricsStore.packetDequeued();
                 forwardWithRetry(packet);
@@ -119,7 +136,6 @@ public class Router {
         }
     }
 
-    
     private void forwardWithRetry(Packet packet) {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 
@@ -195,12 +211,11 @@ public class Router {
         }
     }
 
-  
     private boolean forwardToServer(Packet packet, int port) {
-    String host = (port == Ports.SERVER1_PORT)
-            ? Ports.getServer1Host()
-            : Ports.getServer2Host();
-    try (Socket serverSocket = new Socket(host, port);
+        String host = (port == Ports.SERVER1_PORT)
+                ? Ports.getServer1Host()
+                : Ports.getServer2Host();
+        try (Socket serverSocket = new Socket(host, port);
              PrintWriter writer = new PrintWriter(serverSocket.getOutputStream(), true)) {
             writer.println(packet.serialize());
             return true;

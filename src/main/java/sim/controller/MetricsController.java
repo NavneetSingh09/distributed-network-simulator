@@ -4,6 +4,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import sim.dpi.DpiStore;
 import sim.metrics.LogStore;
 import sim.metrics.MetricsStore;
 import sim.metrics.PacketFlowStore;
@@ -17,11 +19,13 @@ public class MetricsController {
 
     private final MetricsStore metricsStore;
     private final PacketQueue  packetQueue;
+    private final DpiStore dpiStore;
 
-    public MetricsController(MetricsStore metricsStore, PacketQueue packetQueue) {
-        this.metricsStore = metricsStore;
-        this.packetQueue  = packetQueue;
-    }
+    public MetricsController(MetricsStore metricsStore, PacketQueue packetQueue, DpiStore dpiStore) {
+    this.metricsStore = metricsStore;
+    this.packetQueue  = packetQueue;
+    this.dpiStore     = dpiStore;
+}
 
     @GetMapping("/api/logs")
     public List<String> getLogs() {
@@ -69,6 +73,17 @@ public Map<String, Object> health() {
 public String resetMetrics() {
     metricsStore.reset();
     PacketFlowStore.clear();
+    dpiStore.reset();
     return "Metrics reset";
+}
+
+@GetMapping("/api/dpi/protocols")
+public Map<String, Integer> getProtocolStats() {
+    return dpiStore.getProtocolCounts();
+}
+
+@GetMapping("/api/dpi/threats")
+public List<String> getThreats() {
+    return dpiStore.getThreatLog();
 }
 }
